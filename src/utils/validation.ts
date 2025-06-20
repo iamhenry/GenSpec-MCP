@@ -194,24 +194,24 @@ export class ValidationManager {
     const dependencyMatrix = {
       start_genspec: {
         prerequisites: ['USER-STORIES.md'],
-        executes: ['README', 'ROADMAP', 'ARCHITECTURE']
+        executes: ['README', 'ROADMAP', 'SYSTEM-ARCHITECTURE']
       },
       generate_readme: {
         prerequisites: ['USER-STORIES.md'],
-        executes: ['README', 'ROADMAP', 'ARCHITECTURE']
+        executes: ['README', 'ROADMAP', 'SYSTEM-ARCHITECTURE']
       },
       generate_roadmap: {
         prerequisites: ['README.md'],
-        executes: ['ROADMAP', 'ARCHITECTURE']
+        executes: ['ROADMAP', 'SYSTEM-ARCHITECTURE']
       },
       generate_architecture: {
         prerequisites: ['README.md', 'ROADMAP.md'],
-        executes: ['ARCHITECTURE']
+        executes: ['SYSTEM-ARCHITECTURE']
       }
     };
 
     // Validate that all phases are properly mapped
-    const expectedPhases = ['README', 'ROADMAP', 'ARCHITECTURE'];
+    const expectedPhases = ['README', 'ROADMAP', 'SYSTEM-ARCHITECTURE'];
     const mappedPhases = Object.keys(TEMPLATE_MAPPINGS).map(k => {
       const num = parseInt(k) as PhaseNumber;
       return TEMPLATE_MAPPINGS[num].outputFile.replace('.md', '');

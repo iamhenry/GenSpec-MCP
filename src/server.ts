@@ -174,7 +174,7 @@ export class GenSpecServer {
         tools: [
           {
             name: 'start_genspec',
-            description: 'Start complete GenSpec workflow: README→ROADMAP→ARCHITECTURE with approval gates',
+            description: 'Start complete GenSpec workflow: README→ROADMAP→SYSTEM-ARCHITECTURE with approval gates',
             inputSchema: {
               type: 'object',
               properties: {
@@ -246,7 +246,7 @@ export class GenSpecServer {
           },
           {
             name: 'generate_readme',
-            description: 'Generate README.md and continue through ROADMAP→ARCHITECTURE workflow',
+            description: 'Generate README.md and continue through ROADMAP→SYSTEM-ARCHITECTURE workflow',
             inputSchema: {
               type: 'object',
               properties: {
@@ -259,7 +259,7 @@ export class GenSpecServer {
           },
           {
             name: 'generate_roadmap',
-            description: 'Generate ROADMAP.md and continue to ARCHITECTURE (requires existing README.md)',
+            description: 'Generate ROADMAP.md and continue to SYSTEM-ARCHITECTURE (requires existing README.md)',
             inputSchema: {
               type: 'object',
               properties: {
