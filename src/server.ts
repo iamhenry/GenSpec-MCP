@@ -20,6 +20,9 @@ import {
   TEMPLATE_URI_PATTERNS, 
   TOOL_DEPENDENCIES 
 } from './types.js';
+import { ResourceManager } from './utils/resources.js';
+import { TemplateManager } from './utils/templates.js';
+import { DocumentWriter } from './utils/fileWriter.js';
 
 /**
  * GenSpec MCP Server class
@@ -28,6 +31,9 @@ import {
 export class GenSpecServer {
   private server: Server;
   private toolContext: ToolContext;
+  private resourceManager: ResourceManager;
+  private templateManager: TemplateManager;
+  private documentWriter: DocumentWriter;
 
   constructor(server: Server) {
     this.server = server;
@@ -38,6 +44,11 @@ export class GenSpecServer {
         completedPhases: []
       }
     };
+    
+    // Initialize Track B components
+    this.resourceManager = new ResourceManager();
+    this.templateManager = new TemplateManager();
+    this.documentWriter = new DocumentWriter();
   }
 
   /**
@@ -118,69 +129,31 @@ export class GenSpecServer {
   private setupResourceHandlers(): void {
     // List available resources
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return {
-        resources: [
-          {
-            uri: TEMPLATE_URI_PATTERNS.README,
-            name: 'README Generation Template',
-            description: 'Template for generating README.md from USER-STORIES.md',
-            mimeType: 'text/markdown'
-          },
-          {
-            uri: TEMPLATE_URI_PATTERNS.ROADMAP,
-            name: 'Roadmap Generation Template', 
-            description: 'Template for generating ROADMAP.md from README.md context',
-            mimeType: 'text/markdown'
-          },
-          {
-            uri: TEMPLATE_URI_PATTERNS.SYSTEM_ARCHITECTURE,
-            name: 'System Architecture Generation Template',
-            description: 'Template for generating SYSTEM-ARCHITECTURE.md from README + ROADMAP context',
-            mimeType: 'text/markdown'
-          }
-        ]
-      };
+      try {
+        const resources = await this.resourceManager.listAllResources();
+        return { resources };
+      } catch (error) {
+        throw new Error(`Failed to list resources: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     // Read specific resource
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       const { uri } = request.params;
       
-      // TODO: Track B will provide template loading implementation
-      // Placeholder implementation for now
-      switch (uri) {
-        case TEMPLATE_URI_PATTERNS.README:
-          return {
-            contents: [
-              {
-                uri,
-                mimeType: 'text/markdown',
-                text: '[PLACEHOLDER] README template content - implementation pending Track B integration'
-              }
-            ]
-          };
-        case TEMPLATE_URI_PATTERNS.ROADMAP:
-          return {
-            contents: [
-              {
-                uri,
-                mimeType: 'text/markdown',
-                text: '[PLACEHOLDER] ROADMAP template content - implementation pending Track B integration'
-              }
-            ]
-          };
-        case TEMPLATE_URI_PATTERNS.SYSTEM_ARCHITECTURE:
-          return {
-            contents: [
-              {
-                uri,
-                mimeType: 'text/markdown',
-                text: '[PLACEHOLDER] SYSTEM-ARCHITECTURE template content - implementation pending Track B integration'
-              }
-            ]
-          };
-        default:
-          throw new Error(`Unknown resource URI: ${uri}`);
+      try {
+        const content = await this.resourceManager.readResource(uri);
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: 'text/markdown',
+              text: content
+            }
+          ]
+        };
+      } catch (error) {
+        throw new Error(`Failed to read resource ${uri}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     });
   }
@@ -205,6 +178,65 @@ export class GenSpecServer {
                   description: 'Path to project directory containing USER-STORIES.md'
                 }
               }
+            }
+          },
+          {
+            name: 'load_template',
+            description: 'Load a template by phase number (1=README, 2=ROADMAP, 3=SYSTEM-ARCHITECTURE)',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                phase: {
+                  type: 'number',
+                  description: 'Phase number (1, 2, or 3)',
+                  enum: [1, 2, 3]
+                }
+              },
+              required: ['phase']
+            }
+          },
+          {
+            name: 'write_document',
+            description: 'Write generated document content to the appropriate file in _ai/docs/',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                phase: {
+                  type: 'number',
+                  description: 'Phase number (1, 2, or 3)',
+                  enum: [1, 2, 3]
+                },
+                content: {
+                  type: 'string',
+                  description: 'Generated document content to write'
+                }
+              },
+              required: ['phase', 'content']
+            }
+          },
+          {
+            name: 'generate_document',
+            description: 'Load template and prepare for document generation by AI',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                phase: {
+                  type: 'number',
+                  description: 'Phase number (1, 2, or 3)',
+                  enum: [1, 2, 3]
+                },
+                context: {
+                  type: 'object',
+                  description: 'Optional context data for template processing',
+                  properties: {
+                    projectName: { type: 'string' },
+                    userStories: { type: 'string' },
+                    overview: { type: 'string' },
+                    roadmap: { type: 'string' }
+                  }
+                }
+              },
+              required: ['phase']
             }
           },
           {
@@ -264,6 +296,12 @@ export class GenSpecServer {
             return await this.handleGenerateRoadmap(args);
           case 'generate_architecture':
             return await this.handleGenerateArchitecture(args);
+          case 'load_template':
+            return await this.handleLoadTemplate(args);
+          case 'write_document':
+            return await this.handleWriteDocument(args);
+          case 'generate_document':
+            return await this.handleGenerateDocument(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -359,5 +397,107 @@ Implementation pending Track D integration.`
         }
       ]
     };
+  }
+
+  /**
+   * Handle load_template tool - loads template content by phase
+   */
+  private async handleLoadTemplate(args: any) {
+    try {
+      if (!this.templateManager.isValidPhase(args.phase)) {
+        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
+      }
+      
+      const templateData = await this.templateManager.loadTemplate(args.phase);
+      const config = this.templateManager.getTemplateConfig(args.phase);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Template loaded for Phase ${args.phase}:\n\nOutput file: ${config.outputFile}\nOutput path: ${config.outputPath}\n\nTemplate content:\n${templateData.content}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error loading template: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Handle write_document tool - writes document content to file
+   */
+  private async handleWriteDocument(args: any) {
+    try {
+      if (!this.templateManager.isValidPhase(args.phase)) {
+        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
+      }
+      
+      const result = await this.documentWriter.writeDocument(args.phase, args.content);
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Document successfully written to: ${result.filePath}`
+          }]
+        };
+      } else {
+        return {
+          content: [{
+            type: 'text',
+            text: `Error writing document: ${result.error}`
+          }],
+          isError: true
+        };
+      }
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error writing document: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Handle generate_document tool - loads template and prepares for AI generation
+   */
+  private async handleGenerateDocument(args: any) {
+    try {
+      if (!this.templateManager.isValidPhase(args.phase)) {
+        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
+      }
+      
+      const templateData = await this.templateManager.loadTemplate(args.phase);
+      const config = this.templateManager.getTemplateConfig(args.phase);
+      
+      // Process template with context if provided
+      let processedContent = templateData.content;
+      if (args.context) {
+        processedContent = this.templateManager.processTemplate(templateData.content, args.context);
+      }
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Template loaded for ${config.outputFile} generation:\n\n${processedContent}\n\n---\n\nPlease generate the ${config.outputFile} document based on this template and write it to ${config.outputPath}/${config.outputFile}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error generating document: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }],
+        isError: true
+      };
+    }
   }
 }
