@@ -1,0 +1,68 @@
+# Source files (only dist/ should be published)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+.gitignore
+.npmignore
+
+# Documentation and specs (keep README.md)
+specs/
+docs/
+*.md
+!README.md
+
+# Development dependencies and configs
+.vscode/
+.idea/
+.eslintrc*
+.prettierrc*
+jest.config.*
+*.test.*
+*.spec.*
+
+# Build artifacts and logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# Environment and cache
+.env*
+.npm
+.yarn-integrity
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+
+# Test files
+test/
+tests/
+__tests__/
+coverage/
+.nyc_output
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# AI and development directories
+_ai/
+.claude/
+
+# Only include these files in the package:
+# - dist/ (compiled JavaScript)
+# - templates/ (template files)
+# - README.md (documentation)
+# - package.json (already included by default) 
