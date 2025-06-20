@@ -1,176 +1,146 @@
-import path from 'path';
+/**
+ * Logging utilities for GenSpec MCP
+ * Placeholder implementation for Track A compatibility
+ */
 
-export interface LogEntry {
-  timestamp: string;
-  phase: string;
-  status: 'start' | 'complete' | 'error';
-  duration?: number;
-  user: string;
-  message?: string;
+// Log levels
+export enum LogLevel {
+  ERROR = 0,
+  WARN = 1,
+  INFO = 2,
+  DEBUG = 3
 }
 
-/**
- * Simple console logger for GenSpec workflow
- * Format: [timestamp] PHASE:name STATUS:start/complete DURATION:Xs USER:project
- */
+// Log entry type
+export interface LogEntry {
+  level: LogLevel;
+  message: string;
+  timestamp: Date;
+  context?: any;
+}
+
+// Logger class
 export class Logger {
-  private startTimes: Map<string, number> = new Map();
-  private projectName: string;
+  private logLevel: LogLevel;
+  private prefix: string;
 
-  constructor(workingDirectory?: string) {
-    this.projectName = this.extractProjectName(workingDirectory || process.cwd());
+  constructor(prefix = '[GenSpec MCP]', logLevel = LogLevel.INFO) {
+    this.prefix = prefix;
+    this.logLevel = logLevel;
+  }
+
+  // Static factory method for Track A compatibility
+  static create(prefix?: string, logLevel?: LogLevel): Logger {
+    return new Logger(prefix, logLevel);
   }
 
   /**
-   * Logs the start of a phase
+   * Log error message
    */
-  logPhaseStart(phase: string): void {
-    const key = `${phase}_start`;
-    this.startTimes.set(key, Date.now());
-    
+  error(message: string, ...args: any[]): void {
+    if (this.logLevel >= LogLevel.ERROR) {
+      console.error(`${this.prefix} ERROR:`, message, ...args);
+    }
+  }
+
+  /**
+   * Log warning message
+   */
+  warn(message: string, ...args: any[]): void {
+    if (this.logLevel >= LogLevel.WARN) {
+      console.warn(`${this.prefix} WARN:`, message, ...args);
+    }
+  }
+
+  /**
+   * Log info message
+   */
+  info(message: string, ...args: any[]): void {
+    if (this.logLevel >= LogLevel.INFO) {
+      console.log(`${this.prefix} INFO:`, message, ...args);
+    }
+  }
+
+  /**
+   * Log debug message
+   */
+  debug(message: string, ...args: any[]): void {
+    if (this.logLevel >= LogLevel.DEBUG) {
+      console.log(`${this.prefix} DEBUG:`, message, ...args);
+    }
+  }
+
+  /**
+   * Set log level
+   */
+  setLogLevel(level: LogLevel): void {
+    this.logLevel = level;
+  }
+
+  // Track A compatibility methods
+  logMessage(message: string, level?: LogLevel, context?: any): void {
+    const logLevel = level ?? LogLevel.INFO;
     const entry: LogEntry = {
-      timestamp: this.formatTimestamp(),
-      phase,
-      status: 'start',
-      user: this.projectName
+      level: logLevel,
+      message,
+      timestamp: new Date(),
+      context
     };
 
-    console.log(this.formatLogEntry(entry));
+    switch (logLevel) {
+      case LogLevel.ERROR:
+        this.error(message, context);
+        break;
+      case LogLevel.WARN:
+        this.warn(message, context);
+        break;
+      case LogLevel.INFO:
+        this.info(message, context);
+        break;
+      case LogLevel.DEBUG:
+        this.debug(message, context);
+        break;
+    }
   }
 
-  /**
-   * Logs the completion of a phase
-   */
-  logPhaseComplete(phase: string): void {
-    const key = `${phase}_start`;
-    const startTime = this.startTimes.get(key);
-    const duration = startTime ? (Date.now() - startTime) / 1000 : undefined;
-    
-    // Clean up start time
-    this.startTimes.delete(key);
-
-    const entry: LogEntry = {
-      timestamp: this.formatTimestamp(),
-      phase,
-      status: 'complete',
-      duration,
-      user: this.projectName
-    };
-
-    console.log(this.formatLogEntry(entry));
+  logToolStart(tool: string, args?: any): void {
+    this.info(`Starting tool: ${tool}`, args);
   }
 
-  /**
-   * Logs an error in a phase
-   */
-  logPhaseError(phase: string, error: string): void {
-    const key = `${phase}_start`;
-    const startTime = this.startTimes.get(key);
-    const duration = startTime ? (Date.now() - startTime) / 1000 : undefined;
-    
-    // Clean up start time
-    this.startTimes.delete(key);
-
-    const entry: LogEntry = {
-      timestamp: this.formatTimestamp(),
-      phase,
-      status: 'error',
-      duration,
-      user: this.projectName,
-      message: error
-    };
-
-    console.log(this.formatLogEntry(entry));
+  logToolComplete(tool: string, result?: any): void {
+    this.info(`Completed tool: ${tool}`, result);
   }
 
-  /**
-   * Logs a general message
-   */
-  logMessage(message: string): void {
-    console.log(`[${this.formatTimestamp()}] ${message}`);
+  logToolError(tool: string, error: string | Error): void {
+    const errorObj = typeof error === 'string' ? new Error(error) : error;
+    this.error(`Tool error: ${tool}`, errorObj);
   }
 
-  /**
-   * Logs tool execution start
-   */
-  logToolStart(toolName: string): void {
-    this.logPhaseStart(`TOOL:${toolName}`);
-  }
-
-  /**
-   * Logs tool execution completion
-   */
-  logToolComplete(toolName: string): void {
-    this.logPhaseComplete(`TOOL:${toolName}`);
-  }
-
-  /**
-   * Logs tool execution error
-   */
-  logToolError(toolName: string, error: string): void {
-    this.logPhaseError(`TOOL:${toolName}`, error);
-  }
-
-  /**
-   * Logs validation results
-   */
-  logValidation(toolName: string, isValid: boolean, errors: string[] = []): void {
-    if (isValid) {
-      this.logMessage(`VALIDATION:${toolName} RESULT:passed`);
+  logValidation(tool: string, result: any, args?: any): void {
+    if (result.isValid) {
+      this.debug(`Validation passed for ${tool}`, { result, args });
     } else {
-      this.logMessage(`VALIDATION:${toolName} RESULT:failed ERRORS:${errors.length}`);
-      errors.forEach(error => {
-        this.logMessage(`  - ${error}`);
-      });
+      this.warn(`Validation failed for ${tool}`, { errors: result.errors, args });
     }
   }
+}
 
-  /**
-   * Logs approval detection results
-   */
-  logApproval(phase: string, isApproval: boolean, confidence: number): void {
-    this.logMessage(`APPROVAL:${phase} RESULT:${isApproval ? 'approved' : 'feedback'} CONFIDENCE:${confidence.toFixed(2)}`);
-  }
+// Default logger instance
+export const logger = new Logger();
 
-  /**
-   * Formats a log entry according to the specified format
-   */
-  private formatLogEntry(entry: LogEntry): string {
-    let logLine = `[${entry.timestamp}] PHASE:${entry.phase} STATUS:${entry.status}`;
-    
-    if (entry.duration !== undefined) {
-      logLine += ` DURATION:${entry.duration.toFixed(1)}s`;
-    }
-    
-    logLine += ` USER:${entry.user}`;
-    
-    if (entry.message) {
-      logLine += ` - ${entry.message}`;
-    }
-    
-    return logLine;
-  }
+// Convenience functions
+export function logError(message: string, ...args: any[]): void {
+  logger.error(message, ...args);
+}
 
-  /**
-   * Formats timestamp in ISO format
-   */
-  private formatTimestamp(): string {
-    return new Date().toISOString();
-  }
+export function logWarn(message: string, ...args: any[]): void {
+  logger.warn(message, ...args);
+}
 
-  /**
-   * Extracts project name from working directory
-   */
-  private extractProjectName(workingDirectory: string): string {
-    const projectName = path.basename(workingDirectory);
-    // Clean up project name for logging
-    return projectName.replace(/[^\w-]/g, '_').toLowerCase();
-  }
+export function logInfo(message: string, ...args: any[]): void {
+  logger.info(message, ...args);
+}
 
-  /**
-   * Creates a logger instance for a specific working directory
-   */
-  static create(workingDirectory?: string): Logger {
-    return new Logger(workingDirectory);
-  }
+export function logDebug(message: string, ...args: any[]): void {
+  logger.debug(message, ...args);
 }
