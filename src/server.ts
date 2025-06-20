@@ -112,7 +112,10 @@ export class GenSpecServer {
       
       if (name === 'generate') {
         try {
-          const phase = args?.phase as string;
+          const phase = args?.phase;
+          if (typeof phase !== 'string') {
+            throw new Error('Phase parameter is required and must be a string');
+          }
           const projectPath = this.toolContext.workingDirectory;
           
           if (phase) {
