@@ -95,16 +95,18 @@ export class TemplateManager {
    */
   async getTemplateByUri(uri: string): Promise<TemplateData | null> {
     // Find phase by URI
-    const phase = Object.entries(PHASE_TEMPLATE_URIS).find(
+    const phaseEntry = Object.entries(PHASE_TEMPLATE_URIS).find(
       ([_, templateUri]) => templateUri === uri
-    )?.[0] as keyof typeof PHASE_TEMPLATE_URIS;
+    );
 
-    if (!phase) {
+    if (!phaseEntry) {
       return null;
     }
 
+    const phase = Number(phaseEntry[0]) as Phase;
+
     try {
-      return await this.loadTemplate(Number(phase) as Phase);
+      return await this.loadTemplate(phase);
     } catch (error) {
       console.error(`Failed to get template by URI ${uri}:`, error);
       return null;

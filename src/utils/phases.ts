@@ -143,7 +143,7 @@ export class PhaseManager {
     }
 
     const phases = workflow.executes;
-    const dependencies: Record<Phase, Phase[]> = {};
+    const dependencies = {} as Record<Phase, Phase[]>;
 
     // Build dependency map
     phases.forEach(phase => {
@@ -219,7 +219,7 @@ export class PhaseManager {
    */
   async buildGenerationContext(phase: Phase, options: PhaseExecutionOptions): Promise<GenerationContext> {
     // Get content from previous phases
-    const previousPhases: Record<Phase, string> = {};
+    const previousPhases = {} as Record<Phase, string>;
     const prerequisites = this.getPhasePrerequisites(phase);
 
     for (const prereqPhase of prerequisites) {
