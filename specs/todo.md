@@ -12,6 +12,7 @@ You are a specialized agent working on a specific section of todo.md. Your tasks
 5. Commit your changes to git with a descriptive message following the format: "feat: complete [section-name] milestone in todo.md"
 6. If your work depends on other agents, check their commit history first
 7. Report back when your milestone is complete with a summary of changes made
+8. Update todo.md with status progress for each milestone (done, in progress, queuedd, etc) and completed tasks.
 
 Work independently and commit frequently. Focus only on your assigned section to avoid conflicts.
 
@@ -63,31 +64,36 @@ Additional handler responsibilities (2025-06-18):
 
 ---
 
-## 📂 TRACK B: Template System & File Operations  
+## 📂 TRACK B: Template System & File Operations ✅ COMPLETE
 **👤 Agent B** | **Files**: `src/utils/templates.ts`, `src/utils/fileWriter.ts`
 
-### B1: Template Loading System
-- [ ] Create `src/utils/templates.ts` with TemplateManager class
-- [ ] Implement template file reading from /templates directory
-- [ ] Map phase numbers to exact template files matching PRD:
+### B1: Template Loading System ✅ COMPLETE
+- [x] Create `src/utils/templates.ts` with TemplateManager class
+- [x] Implement template file reading from /templates directory
+- [x] Map phase numbers to exact template files matching PRD:
   - Phase 1: `templates/1-generate-readme.md`
   - Phase 2: `templates/2-generate-roadmap.md`
   - Phase 3: `templates/3-generate-system-architecture.md`
-- [ ] Add template validation and error handling
+- [x] Add template validation and error handling
    *Templates are **merged into prompts**; template files are never copied outside the `templates/` directory.*
 
-### B2: File Writing System  
-- [ ] Create `src/utils/fileWriter.ts` with DocumentWriter class
-- [ ] Implement document writing to _ai/docs/ directory
-- [ ] Add output directory creation and permission checking
-- [ ] Map phases to output filenames (README.md, ROADMAP.md, SYSTEM-ARCHITECTURE.md)
+### B2: File Writing System ✅ COMPLETE
+- [x] Create `src/utils/fileWriter.ts` with DocumentWriter class
+- [x] Implement document writing to _ai/docs/ directory
+- [x] Add output directory creation and permission checking
+- [x] Map phases to output filenames (README.md, ROADMAP.md, SYSTEM-ARCHITECTURE.md)
 
-### B3: MCP Resource Integration
-- [ ] Create resource handler functions for template access
-- [ ] Implement template:// URI scheme for MCP resources
-- [ ] Provide integration code for Track A to add to src/server.ts
+### B3: MCP Resource Integration ✅ COMPLETE
+- [x] Create resource handler functions for template access
+- [x] Implement template:// URI scheme for MCP resources
+- [x] Provide integration code for Track A to add to src/server.ts
 
-**Dependencies**: Requires types from Track A (`src/types.ts`)
+**Dependencies**: Requires types from Track A (`src/types.ts`) ✅ COMPLETE
+
+**Integration Deliverables**: 
+- Created `src/utils/trackBIntegration.ts` with handler functions for Track A
+- Provided `handleListResourcesRequest()` and `handleReadResourceRequest()` to replace placeholders
+- Added utility functions for template/document validation and cross-track helpers
 
 ---
 
