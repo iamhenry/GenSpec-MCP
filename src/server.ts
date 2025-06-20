@@ -48,9 +48,9 @@ export class GenSpecServer {
     };
     
     // Initialize Track B components
-    this.resourceManager = new ResourceManager();
+    this.resourceManager = new ResourceManager(this.toolContext.workingDirectory);
     this.templateManager = new TemplateManager();
-    this.documentWriter = new DocumentWriter();
+    this.documentWriter = new DocumentWriter(this.toolContext.workingDirectory);
     
     // Initialize Track D components
     this.genSpecTools = new GenSpecTools(this.toolContext.workingDirectory);
@@ -186,65 +186,6 @@ export class GenSpecServer {
             }
           },
           {
-            name: 'load_template',
-            description: 'Load a template by phase number (1=README, 2=ROADMAP, 3=SYSTEM-ARCHITECTURE)',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                phase: {
-                  type: 'number',
-                  description: 'Phase number (1, 2, or 3)',
-                  enum: [1, 2, 3]
-                }
-              },
-              required: ['phase']
-            }
-          },
-          {
-            name: 'write_document',
-            description: 'Write generated document content to the appropriate file in _ai/docs/',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                phase: {
-                  type: 'number',
-                  description: 'Phase number (1, 2, or 3)',
-                  enum: [1, 2, 3]
-                },
-                content: {
-                  type: 'string',
-                  description: 'Generated document content to write'
-                }
-              },
-              required: ['phase', 'content']
-            }
-          },
-          {
-            name: 'generate_document',
-            description: 'Load template and prepare for document generation by AI',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                phase: {
-                  type: 'number',
-                  description: 'Phase number (1, 2, or 3)',
-                  enum: [1, 2, 3]
-                },
-                context: {
-                  type: 'object',
-                  description: 'Optional context data for template processing',
-                  properties: {
-                    projectName: { type: 'string' },
-                    userStories: { type: 'string' },
-                    overview: { type: 'string' },
-                    roadmap: { type: 'string' }
-                  }
-                }
-              },
-              required: ['phase']
-            }
-          },
-          {
             name: 'generate_readme',
             description: 'Generate README.md and continue through ROADMAP→SYSTEM-ARCHITECTURE workflow',
             inputSchema: {
@@ -301,12 +242,6 @@ export class GenSpecServer {
             return await this.handleGenerateRoadmap(args);
           case 'generate_architecture':
             return await this.handleGenerateArchitecture(args);
-          case 'load_template':
-            return await this.handleLoadTemplate(args);
-          case 'write_document':
-            return await this.handleWriteDocument(args);
-          case 'generate_document':
-            return await this.handleGenerateDocument(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -368,105 +303,4 @@ export class GenSpecServer {
     };
   }
 
-  /**
-   * Handle load_template tool - loads template content by phase
-   */
-  private async handleLoadTemplate(args: any) {
-    try {
-      if (!this.templateManager.isValidPhase(args.phase)) {
-        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
-      }
-      
-      const templateData = await this.templateManager.loadTemplate(args.phase);
-      const config = this.templateManager.getTemplateConfig(args.phase);
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Template loaded for Phase ${args.phase}:\n\nOutput file: ${config.outputFile}\nOutput path: ${config.outputPath}\n\nTemplate content:\n${templateData.content}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error loading template: ${error instanceof Error ? error.message : 'Unknown error'}`
-        }],
-        isError: true
-      };
-    }
-  }
-
-  /**
-   * Handle write_document tool - writes document content to file
-   */
-  private async handleWriteDocument(args: any) {
-    try {
-      if (!this.templateManager.isValidPhase(args.phase)) {
-        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
-      }
-      
-      const result = await this.documentWriter.writeDocument(args.phase, args.content);
-      
-      if (result.success) {
-        return {
-          content: [{
-            type: 'text',
-            text: `Document successfully written to: ${result.filePath}`
-          }]
-        };
-      } else {
-        return {
-          content: [{
-            type: 'text',
-            text: `Error writing document: ${result.error}`
-          }],
-          isError: true
-        };
-      }
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error writing document: ${error instanceof Error ? error.message : 'Unknown error'}`
-        }],
-        isError: true
-      };
-    }
-  }
-
-  /**
-   * Handle generate_document tool - loads template and prepares for AI generation
-   */
-  private async handleGenerateDocument(args: any) {
-    try {
-      if (!this.templateManager.isValidPhase(args.phase)) {
-        throw new Error(`Invalid phase number: ${args.phase}. Must be 1, 2, or 3.`);
-      }
-      
-      const templateData = await this.templateManager.loadTemplate(args.phase);
-      const config = this.templateManager.getTemplateConfig(args.phase);
-      
-      // Process template with context if provided
-      let processedContent = templateData.content;
-      if (args.context) {
-        processedContent = this.templateManager.processTemplate(templateData.content, args.context);
-      }
-      
-      return {
-        content: [{
-          type: 'text',
-          text: `Template loaded for ${config.outputFile} generation:\n\n${processedContent}\n\n---\n\nPlease generate the ${config.outputFile} document based on this template and write it to ${config.outputPath}/${config.outputFile}`
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error generating document: ${error instanceof Error ? error.message : 'Unknown error'}`
-        }],
-        isError: true
-      };
-    }
-  }
 }

@@ -15,9 +15,9 @@ export class DocumentWriter {
   private basePath: string;
   private docsPath: string;
 
-  constructor(basePath?: string) {
-    // Default to project root directory
-    this.basePath = basePath || resolve(__dirname, '../..');
+  constructor(projectPath?: string) {
+    // Use the user's project directory (where documents should be written)
+    this.basePath = projectPath || process.cwd();
     this.docsPath = join(this.basePath, '_ai', 'docs');
   }
 

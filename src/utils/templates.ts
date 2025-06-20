@@ -15,9 +15,9 @@ const __dirname = dirname(__filename);
 export class TemplateManager {
   private basePath: string;
 
-  constructor(basePath?: string) {
-    // Default to project root directory
-    this.basePath = basePath || resolve(__dirname, '../..');
+  constructor() {
+    // Always use MCP server's template directory - never user's project directory
+    this.basePath = resolve(__dirname, '../..');
   }
 
   /**

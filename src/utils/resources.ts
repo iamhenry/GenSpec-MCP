@@ -11,9 +11,9 @@ export class ResourceManager {
   private templateManager: TemplateManager;
   private documentWriter: DocumentWriter;
 
-  constructor(basePath?: string) {
-    this.templateManager = new TemplateManager(basePath);
-    this.documentWriter = new DocumentWriter(basePath);
+  constructor(projectPath?: string) {
+    this.templateManager = new TemplateManager();
+    this.documentWriter = new DocumentWriter(projectPath);
   }
 
   /**
