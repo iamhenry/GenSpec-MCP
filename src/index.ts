@@ -43,10 +43,7 @@ async function main(): Promise<void> {
     // Connect server to transport
     await server.connect(transport);
     
-    // Log server startup
-    console.error('[GenSpec MCP] Server started successfully');
-    console.error('[GenSpec MCP] Capabilities: prompts, resources, tools');
-    console.error('[GenSpec MCP] Waiting for MCP client connection...');
+    // Server is now ready - no console output needed for MCP protocol
 
   } catch (error) {
     console.error('[GenSpec MCP] Failed to start server:', error);
@@ -56,12 +53,10 @@ async function main(): Promise<void> {
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.error('[GenSpec MCP] Received SIGINT, shutting down gracefully...');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.error('[GenSpec MCP] Received SIGTERM, shutting down gracefully...');
   process.exit(0);
 });
 

@@ -23,6 +23,7 @@ import {
 import { ResourceManager } from './utils/resources.js';
 import { TemplateManager } from './utils/templates.js';
 import { DocumentWriter } from './utils/fileWriter.js';
+import { GenSpecTools } from './utils/tools.js';
 
 /**
  * GenSpec MCP Server class
@@ -34,6 +35,7 @@ export class GenSpecServer {
   private resourceManager: ResourceManager;
   private templateManager: TemplateManager;
   private documentWriter: DocumentWriter;
+  private genSpecTools: GenSpecTools;
 
   constructor(server: Server) {
     this.server = server;
@@ -49,6 +51,9 @@ export class GenSpecServer {
     this.resourceManager = new ResourceManager();
     this.templateManager = new TemplateManager();
     this.documentWriter = new DocumentWriter();
+    
+    // Initialize Track D components
+    this.genSpecTools = new GenSpecTools(this.toolContext.workingDirectory);
   }
 
   /**
@@ -65,7 +70,7 @@ export class GenSpecServer {
       // Set up tool handlers
       this.setupToolHandlers();
 
-      console.error('[GenSpec MCP] Server initialized with all handlers');
+      // Server initialized successfully
     } catch (error) {
       console.error('[GenSpec MCP] Failed to initialize server:', error);
       throw error;
@@ -323,19 +328,10 @@ export class GenSpecServer {
    * Handle start_genspec tool - executes complete workflow
    */
   private async handleStartGenspec(args: any) {
-    // TODO: Track D will provide implementation with validation and workflow execution
-    const projectPath = args?.projectPath || this.toolContext.workingDirectory;
-    
+    const result = await this.genSpecTools.handleStartGenspec(args);
     return {
-      content: [
-        {
-          type: 'text',
-          text: `[PLACEHOLDER] Starting GenSpec workflow at ${projectPath}
-Prerequisites: ${TOOL_DEPENDENCIES.start_genspec.prerequisites.join(', ')}
-Workflow: ${TOOL_DEPENDENCIES.start_genspec.executes.map((p: Phase) => Phase[p]).join('→')}
-Implementation pending Track D integration with validation, approval, and generation logic.`
-        }
-      ]
+      content: result.content,
+      isError: result.isError
     };
   }
 
@@ -343,19 +339,10 @@ Implementation pending Track D integration with validation, approval, and genera
    * Handle generate_readme tool - starts from README phase
    */
   private async handleGenerateReadme(args: any) {
-    // TODO: Track D will provide implementation
-    const projectPath = args?.projectPath || this.toolContext.workingDirectory;
-    
+    const result = await this.genSpecTools.handleGenerateReadme(args);
     return {
-      content: [
-        {
-          type: 'text',
-          text: `[PLACEHOLDER] Generating README at ${projectPath}
-Prerequisites: ${TOOL_DEPENDENCIES.generate_readme.prerequisites.join(', ')}
-Workflow: ${TOOL_DEPENDENCIES.generate_readme.executes.map((p: Phase) => Phase[p]).join('→')}
-Implementation pending Track D integration.`
-        }
-      ]
+      content: result.content,
+      isError: result.isError
     };
   }
 
@@ -363,19 +350,10 @@ Implementation pending Track D integration.`
    * Handle generate_roadmap tool - starts from ROADMAP phase
    */
   private async handleGenerateRoadmap(args: any) {
-    // TODO: Track D will provide implementation
-    const projectPath = args?.projectPath || this.toolContext.workingDirectory;
-    
+    const result = await this.genSpecTools.handleGenerateRoadmap(args);
     return {
-      content: [
-        {
-          type: 'text',
-          text: `[PLACEHOLDER] Generating ROADMAP at ${projectPath}
-Prerequisites: ${TOOL_DEPENDENCIES.generate_roadmap.prerequisites.join(', ')}
-Workflow: ${TOOL_DEPENDENCIES.generate_roadmap.executes.map((p: Phase) => Phase[p]).join('→')}
-Implementation pending Track D integration.`
-        }
-      ]
+      content: result.content,
+      isError: result.isError
     };
   }
 
@@ -383,19 +361,10 @@ Implementation pending Track D integration.`
    * Handle generate_architecture tool - executes ARCHITECTURE phase only
    */
   private async handleGenerateArchitecture(args: any) {
-    // TODO: Track D will provide implementation
-    const projectPath = args?.projectPath || this.toolContext.workingDirectory;
-    
+    const result = await this.genSpecTools.handleGenerateArchitecture(args);
     return {
-      content: [
-        {
-          type: 'text',
-          text: `[PLACEHOLDER] Generating SYSTEM-ARCHITECTURE at ${projectPath}
-Prerequisites: ${TOOL_DEPENDENCIES.generate_architecture.prerequisites.join(', ')}
-Workflow: ${TOOL_DEPENDENCIES.generate_architecture.executes.map((p: Phase) => Phase[p]).join('→')}
-Implementation pending Track D integration.`
-        }
-      ]
+      content: result.content,
+      isError: result.isError
     };
   }
 
