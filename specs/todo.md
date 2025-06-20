@@ -56,6 +56,11 @@ Build a production-ready MCP server with **5 parallel development tracks** to av
 - Coordinate with Track D for continuation workflow tool and prompt handlers
 - Coordinate with Track E for package.json scripts
 
+Additional handler responsibilities (2025-06-18):
+  - Handlers MUST return an MCP **sample-request** rather than final content.
+  - Handlers MUST ensure `_ai/docs/` exists (create if necessary).
+  - Emit standard start/complete log lines per phase.
+
 ---
 
 ## 📂 TRACK B: Template System & File Operations  
@@ -69,6 +74,7 @@ Build a production-ready MCP server with **5 parallel development tracks** to av
   - Phase 2: `templates/2-generate-roadmap.md`
   - Phase 3: `templates/3-generate-system-architecture.md`
 - [ ] Add template validation and error handling
+   *Templates are **merged into prompts**; template files are never copied outside the `templates/` directory.*
 
 ### B2: File Writing System  
 - [ ] Create `src/utils/fileWriter.ts` with DocumentWriter class
@@ -119,30 +125,42 @@ Build a production-ready MCP server with **5 parallel development tracks** to av
 ### D1: Input Validation System
 - [ ] Create `src/utils/validation.ts` with ValidationManager class
 - [ ] Implement USER-STORIES.md validation (existence, readability, content)
+- [ ] Validate user-story source in the following priority order:
+    1. `userStory` inline text argument
+    2. `userStoryUri` argument → request client to fetch via MCP `ReadResource`
+    3. Fallback to local `USER-STORIES.md`
+ Abort with `ERR_MISSING_USER_STORIES` if none are available.
 - [ ] Add phase prerequisite validation for continuation workflows
 - [ ] Add environment validation (templates, permissions)
 - [ ] Add dependency matrix validation for continuation workflow dependencies
 
 ### D2: Approval Detection System  
 - [ ] Create `src/utils/approval.ts` with ApprovalManager class
-- [ ] Implement approval message detection ("approve", "ok", "yes", etc.)
-- [ ] Add edit feedback extraction for non-approval messages
-- [ ] Generate approval prompts for user interaction
+- [ ] Implement approval message detection using the following case-insensitive whitelist **or prefix**:
+  - `approve`, `approved`, `ok`, `okay`, `yes`, `y`, `lgtm`
+- [ ] Add edit feedback extraction for non-approval messages and trigger re-generation. Allow up to **5** consecutive non-approval cycles per phase, then abort with an error message.
 
 ### D3: MCP Tools Implementation
-- [ ] Implement 4 specific tools with continuation logic:
+- [ ] Implement 4 specific tools with continuation logic (update **start_genspec** inputSchema to accept optional `userStory` and `userStoryUri`):
   - `start_genspec`: Start workflow (README→ROADMAP→ARCHITECTURE)
   - `generate_readme`: Generate README (README→ROADMAP→ARCHITECTURE)
   - `generate_roadmap`: Generate roadmap (ROADMAP→ARCHITECTURE)
   - `generate_architecture`: Generate architecture (ARCHITECTURE only)
-- [ ] Implement continuation workflow dependencies between tools
-- [ ] Provide integration code for Track A to add to src/server.ts
+- [ ] Implement continuation workflow dependencies between tools. Reject a new genspec invocation if another workflow is currently in progress within the same workspace (single-workflow concurrency).
+- [ ] Provide integration code for Track A to add to src/server.ts. Ensure each tool registers `name`, `description`, an **empty inputSchema**, and an outputSchema containing `phase`, `nextAction`, and `draftPath`.
 - [ ] Handle tool execution with proper error responses
 
 ### D4: MCP Prompt Implementation
 - [ ] Create prompt handler functions for /generate command
 - [ ] Handle phase-specific commands (/generate readme, /generate roadmap, etc.)
 - [ ] Provide integration code for Track A to add to src/server.ts
++- [ ] Register the following prompts via MCP `prompts` capability:
+    - `/start-genspec` → invokes `start_genspec` tool
+    - `/start-readme`  → invokes `generate_readme` tool
+    - `/start-roadmap` → invokes `generate_roadmap` tool
+    - `/start-arch`    → invokes `generate_architecture` tool
+  Each `GetPrompt` handler SHALL return a single **tool-call** message that calls the mapped tool with an empty arguments object.
++- [ ] Provide integration code for Track A to add to `src/server.ts`
 
 ### D5: Logging Implementation
 - [ ] Implement basic console output logging
@@ -217,6 +235,7 @@ Build a production-ready MCP server with **5 parallel development tracks** to av
 - No agent modifies another agent's files directly
 - Template file mappings must exactly match PRD specifications
 - ALL LLM integration handled by client, NOT server
+- Handlers return *sample-requests* that the client executes.
 - Basic console logging integrated across all tracks for workflow monitoring
 
 ---
@@ -234,10 +253,11 @@ Build a production-ready MCP server with **5 parallel development tracks** to av
 - [ ] Complete documentation and troubleshooting guides
 
 ### Core Functionality  
-- [ ] Uses existing templates as system prompts (no new template files)
+- [ ] Uses existing templates as system prompts (no new template files **and no template copies in _ai/docs/**)
 - [ ] Generate → Present → Approve/Edit workflow functions correctly
 - [ ] Phase dependencies and prerequisite checking work
 - [ ] Error handling provides clear user feedback
+- [ ] MCP tool list is discoverable in clients via `name` & `description` metadata
 
 ### Integration Success
 - [ ] All tracks integrate successfully into working MCP server

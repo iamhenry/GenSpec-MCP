@@ -33,18 +33,24 @@ Create a streamlined, chat-driven pipeline that converts a user-provided **`USER
 | ID | Requirement |
 |----|-------------|
 | FR-1 | The module SHALL abort if `USER-STORIES.md` is missing. |
+| FR-1 | The module SHALL abort **unless user-story content is supplied** by at least one of the following:
+  1. Local `USER-STORIES.md` file
+  2. `userStory` inline text argument to the tool
+  3. `userStoryUri` argument that the client resolves to text (e.g., a public Gist URL). |
 | FR-2 | `start_genspec` SHALL execute phases in order: README → ROADMAP → SYSTEM-ARCHITECTURE. |
 | FR-3 | Each phase SHALL generate the document, present it to the user, then wait for explicit approval before continuing to the next phase. |
 | FR-4 | A message that begins with `approve` (case-insensitive) SHALL be interpreted as approval. |
 | FR-5 | Any other message while awaiting approval SHALL be treated as edits and re-run the current phase. |
 | FR-6 | Phase-specific tools (`generate_readme`, `generate_roadmap`, `generate_architecture`) SHALL run only their respective phase and enforce prerequisite checks. |
-| FR-7 | Generated files SHALL overwrite `_ai/docs/{README,ROADMAP,SYSTEM-ARCHITECTURE}.md`. |
+| FR-7 | Generated files SHALL overwrite `_ai/docs/{README,ROADMAP,SYSTEM-ARCHITECTURE}.md`; the server SHALL create `_ai/docs/` if it does not exist. |
 | FR-8 | The tool SHALL output generation time and token count to console with format: [timestamp] PHASE:name STATUS:start/complete DURATION:Xs USER:project. |
+| FR-9 | The server SHALL return MCP *sample-requests* (prompts/messages) for the client to perform LLM sampling. |
+| FR-10 | The server SHALL emit one log line per phase start and completion in the format `[YYYY-MM-DDTHH:MM:SSZ] PHASE:<name> STATUS:<start|complete> DURATION:<Xs> USER:<workspace>`. |
 
 ## 4.1 Tool Specification
 The MCP server exposes the following tools with continuation workflow:
 
-- **start_genspec**: Executes README→ROADMAP→ARCHITECTURE pipeline
+- **start_genspec**: Executes README→ROADMAP→ARCHITECTURE pipeline. Accepts optional `userStory` or `userStoryUri` arguments.
 - **generate_readme**: Starts from README, continues through README→ROADMAP→ARCHITECTURE
 - **generate_roadmap**: Starts from ROADMAP, continues through ROADMAP→ARCHITECTURE
 - **generate_architecture**: Executes only SYSTEM-ARCHITECTURE phase
@@ -57,6 +63,43 @@ The MCP server exposes the following tools with continuation workflow:
 | generate_roadmap | README.md | ROADMAP→ARCHITECTURE |
 | generate_architecture | README.md + ROADMAP.md | ARCHITECTURE |
 
+Each tool MUST register `name`, `description`, an empty `inputSchema`, and an `outputSchema` containing `phase`, `nextAction`, and `draftPath`, enabling discovery in MCP clients.
+
+#### start_genspec Input Schema (draft-07)
+
+```jsonc
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "userStory": {
+      "type": "string",
+      "description": "Raw markdown content of the user stories"
+    },
+    "userStoryUri": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI (file://, https://, etc.) that resolves to the user-story markdown"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+If both fields are omitted, the tool falls back to reading `USER-STORIES.md` and fails with `ERR_MISSING_USER_STORIES` if not found.
+
+## 4.2 Prompt Catalogue
+The server SHALL register the following prompts via the MCP **prompts** capability so clients can expose them as slash commands or quick actions [Docs – UI integration](https://modelcontextprotocol.io/docs/concepts/prompts#ui-integration).
+
+| Prompt | Description | Invokes Tool |
+|--------|-------------|--------------|
+|/start-genspec | Run full workflow. Optional arguments: `userStory` (text) or `userStoryUri` (URL). | start_genspec |
+|/start-readme | Regenerate README, then continue through ROADMAP → SYSTEM-ARCHITECTURE | generate_readme |
+|/start-roadmap | Start at ROADMAP, then continue through SYSTEM-ARCHITECTURE | generate_roadmap |
+|/start-arch | Generate only SYSTEM-ARCHITECTURE | generate_architecture |
+
+All prompts have no arguments, and their `GetPrompt` handler SHALL return a single tool-call message that invokes the mapped tool with an empty arguments object.
+
 ---
 
 ## 5  Non-Functional Requirements
@@ -64,6 +107,7 @@ The MCP server exposes the following tools with continuation workflow:
 * **Security:** No shell execution or external HTTP calls.  
 * **Performance:** Each phase should complete within 30 s for ≤5 000-token user story files.  
 * **Reliability:** Clear error messages for missing prerequisites; no silent failures.  
+* **Concurrency:** Only one GenSpec workflow may run concurrently per workspace.  
 
 ---
 
@@ -86,7 +130,9 @@ sequenceDiagram
     M->>U: Present draft SYSTEM-ARCHITECTURE.md
     U->>M: approve
     M-->>U: ✔ Workflow complete
-````
+```
+
+> Note: Each "Generate" step corresponds to the server returning an MCP *sample-request*; the client executes the `sample` call and streams the result back to the server.
 
 ---
 
@@ -103,6 +149,8 @@ sequenceDiagram
 * `template://2-generate-roadmap` - ROADMAP generation template resource
 * `template://3-generate-system-architecture` - SYSTEM-ARCHITECTURE generation template resource
 
+> Templates are merged into prompts; raw template markdown is **not** delivered to the user.
+
 ---
 
 ## 8  Success Metrics
@@ -113,5 +161,6 @@ sequenceDiagram
 | Avg. approval iterations per phase  | ≤ 1.5                 |
 | Avg. generation latency             | ≤ 30 s per phase      |
 | User satisfaction (post-run survey) | ≥ 4 / 5               |
+| Template leakage incidents          | 0                     |
 
 ---
