@@ -24,6 +24,7 @@ import { ResourceManager } from './utils/resources.js';
 import { TemplateManager } from './utils/templates.js';
 import { DocumentWriter } from './utils/fileWriter.js';
 import { GenSpecTools } from './utils/tools.js';
+import { DocumentGenerator } from './utils/generator.js';
 
 /**
  * GenSpec MCP Server class
@@ -36,6 +37,7 @@ export class GenSpecServer {
   private templateManager: TemplateManager;
   private documentWriter: DocumentWriter;
   private genSpecTools: GenSpecTools;
+  private documentGenerator: DocumentGenerator;
 
   constructor(server: Server) {
     this.server = server;
@@ -51,6 +53,9 @@ export class GenSpecServer {
     this.resourceManager = new ResourceManager(this.toolContext.workingDirectory);
     this.templateManager = new TemplateManager();
     this.documentWriter = new DocumentWriter(this.toolContext.workingDirectory);
+    
+    // Initialize document generation components
+    this.documentGenerator = new DocumentGenerator(this.toolContext.workingDirectory);
     
     // Initialize Track D components
     this.genSpecTools = new GenSpecTools(this.toolContext.workingDirectory);
@@ -106,21 +111,47 @@ export class GenSpecServer {
       const { name, arguments: args } = request.params;
       
       if (name === 'generate') {
-        // TODO: Track D will implement prompt handler logic
-        // Placeholder implementation for now
-        const phase = args?.phase as string;
-        return {
-          description: `Generate ${phase || 'all phases'} from USER-STORIES.md`,
-          messages: [
-            {
-              role: 'user',
-              content: {
-                type: 'text',
-                text: `[PLACEHOLDER] Generate ${phase || 'complete workflow'} - implementation pending Track D integration`
-              }
-            }
-          ]
-        };
+        try {
+          const phase = args?.phase as string;
+          const projectPath = this.toolContext.workingDirectory;
+          
+          if (phase) {
+            // Generate prompt for specific phase
+            const phaseEnum = this.parsePhase(phase);
+            const systemPrompt = await this.documentGenerator.getSystemPrompt(phaseEnum, projectPath);
+            
+            return {
+              description: `Generate ${phase.toUpperCase()} document from USER-STORIES.md`,
+              messages: [
+                {
+                  role: 'system',
+                  content: {
+                    type: 'text',
+                    text: systemPrompt
+                  }
+                }
+              ]
+            };
+          } else {
+            // Generate prompt for complete workflow
+            const readmePrompt = await this.documentGenerator.getSystemPrompt(Phase.README, projectPath);
+            
+            return {
+              description: 'Generate complete documentation workflow from USER-STORIES.md',
+              messages: [
+                {
+                  role: 'system',
+                  content: {
+                    type: 'text',
+                    text: `You will generate a complete documentation set (README, ROADMAP, and SYSTEM-ARCHITECTURE) based on user stories. Start with the README:\n\n${readmePrompt}`
+                  }
+                }
+              ]
+            };
+          }
+        } catch (error) {
+          throw new Error(`Failed to generate prompt: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       
       throw new Error(`Unknown prompt: ${name}`);
@@ -301,6 +332,23 @@ export class GenSpecServer {
       content: result.content,
       isError: result.isError
     };
+  }
+
+  /**
+   * Parse phase string to Phase enum
+   */
+  private parsePhase(phase: string): Phase {
+    switch (phase.toLowerCase()) {
+      case 'readme':
+        return Phase.README;
+      case 'roadmap':
+        return Phase.ROADMAP;
+      case 'architecture':
+      case 'system-architecture':
+        return Phase.SYSTEM_ARCHITECTURE;
+      default:
+        throw new Error(`Unknown phase: ${phase}`);
+    }
   }
 
 }

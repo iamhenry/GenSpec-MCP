@@ -1,6 +1,7 @@
 import { ValidationManager } from './validation.js';
 import { ApprovalManager } from './approval.js';
 import { Logger } from './logging.js';
+import { DocumentGenerator } from './generator.js';
 import { PhaseNumber, Phase } from '../types.js';
 
 export interface ToolResult {
@@ -26,11 +27,15 @@ export class GenSpecTools {
   private validator: ValidationManager;
   private approvalManager: ApprovalManager;
   private logger: Logger;
+  private documentGenerator: DocumentGenerator;
+  private workingDirectory: string;
 
   constructor(workingDirectory?: string) {
+    this.workingDirectory = workingDirectory || process.cwd();
     this.validator = new ValidationManager(workingDirectory);
     this.approvalManager = new ApprovalManager();
     this.logger = Logger.create(workingDirectory);
+    this.documentGenerator = new DocumentGenerator(this.workingDirectory);
   }
 
   /**
@@ -216,41 +221,82 @@ export class GenSpecTools {
   }
 
   /**
-   * Executes workflow phases with approval gates
-   * NOTE: This is a placeholder implementation since we need Track B (templates) and Track C (PhaseManager)
-   * The actual generation will be handled by those tracks when they're complete
+   * Executes workflow phases with document generation
    */
   private async executeWorkflow(phases: Phase[], context: ToolExecutionContext): Promise<ToolResult> {
     const phaseNames = phases.map(p => this.getPhaseDisplayName(p));
+    context.logger.logMessage(`Starting workflow execution: ${phaseNames.join(' → ')}`);
     
-    // For now, return a structured response that explains what would happen
-    // This will be replaced with actual generation logic when Track B and C are ready
-    let responseText = `🚀 GenSpec workflow ready to execute: ${phaseNames.join(' → ')}\n\n`;
-    
+    let responseText = `🚀 GenSpec workflow executing: ${phaseNames.join(' → ')}\n\n`;
     responseText += `📁 Project: ${context.projectPath}\n`;
-    responseText += `📋 Phases to execute:\n`;
+    responseText += `📋 Generated documents:\n\n`;
     
-    for (let i = 0; i < phases.length; i++) {
-      const phase = phases[i];
-      const phaseNum = phase as PhaseNumber;
-      const displayName = this.getPhaseDisplayName(phase);
+    const generatedFiles: string[] = [];
+    
+    try {
+      // Execute each phase sequentially
+      for (let i = 0; i < phases.length; i++) {
+        const phase = phases[i];
+        const displayName = this.getPhaseDisplayName(phase);
+        
+        context.logger.logMessage(`Generating ${displayName}...`);
+        responseText += `  📄 ${i + 1}. ${displayName} - `;
+        
+        // Generate document for this phase
+        const result = await this.documentGenerator.generateDocument(phase, context.projectPath);
+        
+        if (result.success) {
+          generatedFiles.push(result.filePath || `_ai/docs/${displayName}.md`);
+          responseText += `✅ Generated successfully\n`;
+          context.logger.logMessage(`${displayName} generated successfully`);
+        } else {
+          responseText += `❌ Generation failed: ${result.error}\n`;
+          context.logger.logMessage(`${displayName} generation failed: ${result.error}`);
+          
+          return {
+            content: [{
+              type: 'text',
+              text: responseText + `\n💥 Workflow stopped due to generation error in ${displayName} phase.`
+            }],
+            isError: true
+          };
+        }
+      }
       
-      responseText += `  ${i + 1}. ${displayName} - Generate and await approval\n`;
+      // Success summary
+      responseText += `\n✅ Workflow completed successfully!\n\n`;
+      responseText += `📁 Generated files:\n`;
+      for (const filePath of generatedFiles) {
+        responseText += `  • ${filePath}\n`;
+      }
+      
+      responseText += `\n📝 Next Steps:\n`;
+      responseText += `  • Review the generated documents in _ai/docs/\n`;
+      responseText += `  • Edit documents as needed\n`;
+      responseText += `  • Use documents for your project development\n\n`;
+      responseText += `🎉 GenSpec workflow complete!`;
+      
+      context.logger.logMessage(`Workflow completed successfully. Generated ${generatedFiles.length} files.`);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: responseText
+        }]
+      };
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      context.logger.logMessage(`Workflow execution failed: ${errorMsg}`);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: responseText + `\n💥 Workflow execution failed: ${errorMsg}`
+        }],
+        isError: true
+      };
     }
-    
-    responseText += `\n⚠️  Implementation Note: This tool requires Track B (Template System) and Track C (Document Generation Engine) to be completed for full workflow execution.\n\n`;
-    responseText += `📝 Next Steps:\n`;
-    responseText += `  • Track B will provide template loading and file writing\n`;
-    responseText += `  • Track C will provide document generation and phase management\n`;
-    responseText += `  • This tool will then execute the complete approval-based workflow\n\n`;
-    responseText += `✅ Validation passed - ready for integration with other tracks`;
-
-    return {
-      content: [{
-        type: 'text',
-        text: responseText
-      }]
-    };
   }
 
   /**
