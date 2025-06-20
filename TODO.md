@@ -1,5 +1,7 @@
 # GenSpec MCP Server - Parallel Development Plan
 
+MCP Server Docs: https://modelcontextprotocol.io/specification/2025-06-18/server
+
 <instructions>
 You are a specialized agent working on a specific section of todo.md. Your tasks:
 
