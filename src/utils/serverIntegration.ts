@@ -120,22 +120,15 @@ export class ServerIntegration {
       }
 
       // Return a message that instructs the client to call the mapped tool
+      // Note: MCP prompts should return messages with valid content types (text, image, audio, resource)
+      // tool_use is not a valid content type for prompt messages
       return {
         messages: [
           {
             role: 'assistant',
             content: {
               type: 'text',
-              text: `To execute the ${name} workflow, please call the ${toolName} tool with appropriate arguments.`,
-            },
-          },
-          {
-            role: 'assistant',
-            content: {
-              type: 'tool_use',
-              id: `tool_${Date.now()}`,
-              name: toolName,
-              input: toolName === 'start_genspec' ? {} : {}, // All tools have empty input schema except start_genspec can have userStory/userStoryUri
+              text: `To execute the ${name} workflow, please call the ${toolName} tool with appropriate arguments. This will start the GenSpec documentation generation process.`,
             },
           },
         ],
