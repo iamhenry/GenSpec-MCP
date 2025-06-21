@@ -25,12 +25,21 @@ import {
   ToolOutputSchema,
 } from './types.js';
 
+import {
+  handleListResourcesRequest,
+  handleReadResourceRequest,
+} from './utils/trackBIntegration.js';
+
+import { ServerIntegration } from './utils/serverIntegration.js';
+
 export class GenSpecServer {
   private server: Server;
   private workflowState: Map<string, boolean> = new Map(); // Track active workflows per workspace
+  private serverIntegration: ServerIntegration;
 
   constructor(server: Server) {
     this.server = server;
+    this.serverIntegration = new ServerIntegration();
   }
 
   async initialize(): Promise<void> {
@@ -107,52 +116,11 @@ export class GenSpecServer {
    * Handles: template:// URI scheme for template access
    */
   private setupResourceHandlers(): void {
-    // List available resources
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return {
-        resources: [
-          {
-            uri: PHASE_TEMPLATE_URIS[Phase.README],
-            name: 'README Generation Template',
-            description: 'Template for generating README.md documents',
-            mimeType: 'text/markdown',
-          },
-          {
-            uri: PHASE_TEMPLATE_URIS[Phase.ROADMAP],
-            name: 'Roadmap Generation Template',
-            description: 'Template for generating ROADMAP.md documents',
-            mimeType: 'text/markdown',
-          },
-          {
-            uri: PHASE_TEMPLATE_URIS[Phase.SYSTEM_ARCHITECTURE],
-            name: 'System Architecture Generation Template',
-            description: 'Template for generating SYSTEM-ARCHITECTURE.md documents',
-            mimeType: 'text/markdown',
-          },
-        ],
-      };
-    });
+    // List available resources - integrated with Track B
+    this.server.setRequestHandler(ListResourcesRequestSchema, handleListResourcesRequest);
 
-    // Read specific resource
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      const { uri } = request.params;
-      
-      // TODO: Track B will implement template loading
-      // This is a placeholder that will be filled by Track B
-      if (uri.startsWith('template://')) {
-        return {
-          contents: [
-            {
-              uri,
-              mimeType: 'text/markdown',
-              text: `[PLACEHOLDER] Template content for ${uri} - Track B will implement template loading`,
-            },
-          ],
-        };
-      }
-      
-      throw new Error(`Unsupported resource URI: ${uri}`);
-    });
+    // Read specific resource - integrated with Track B
+    this.server.setRequestHandler(ReadResourceRequestSchema, handleReadResourceRequest);
   }
 
   /**
