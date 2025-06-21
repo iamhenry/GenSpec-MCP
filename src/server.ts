@@ -81,34 +81,7 @@ export class GenSpecServer {
     });
 
     // Get specific prompt - returns tool-call message
-    this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-      const { name } = request.params;
-      
-      // Map prompt names to tool names
-      const toolMapping: Record<string, string> = {
-        'start-genspec': 'start_genspec',
-        'start-readme': 'generate_readme',
-        'start-roadmap': 'generate_roadmap',
-        'start-arch': 'generate_architecture',
-      };
-
-      const toolName = toolMapping[name];
-      if (!toolName) {
-        throw new Error(`Unknown prompt: ${name}`);
-      }
-
-      return {
-        messages: [
-          {
-            role: 'assistant',
-            content: {
-              type: 'text',
-              text: `Invoking ${toolName} tool...`,
-            },
-          },
-        ],
-      };
-    });
+    this.server.setRequestHandler(GetPromptRequestSchema, this.serverIntegration.getPromptHandler());
   }
 
   /**
@@ -183,67 +156,7 @@ export class GenSpecServer {
     });
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      
-      // TODO: Track D will implement tool execution logic
-      // This is a placeholder that will be filled by Track D
-      
-      const outputSchema: ToolOutputSchema = {
-        phase: 'PLACEHOLDER',
-        nextAction: 'approve',
-        draftPath: '_ai/docs/PLACEHOLDER.md',
-      };
-
-      switch (name) {
-        case 'start_genspec':
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `[PLACEHOLDER] start_genspec tool called - Track D will implement execution logic\nArguments: ${JSON.stringify(args)}`,
-              },
-            ],
-            isError: false,
-          };
-
-        case 'generate_readme':
-          return {
-            content: [
-              {
-                type: 'text',
-                text: '[PLACEHOLDER] generate_readme tool called - Track D will implement execution logic',
-              },
-            ],
-            isError: false,
-          };
-
-        case 'generate_roadmap':
-          return {
-            content: [
-              {
-                type: 'text',
-                text: '[PLACEHOLDER] generate_roadmap tool called - Track D will implement execution logic',
-              },
-            ],
-            isError: false,
-          };
-
-        case 'generate_architecture':
-          return {
-            content: [
-              {
-                type: 'text',
-                text: '[PLACEHOLDER] generate_architecture tool called - Track D will implement execution logic',
-              },
-            ],
-            isError: false,
-          };
-
-        default:
-          throw new Error(`Unknown tool: ${name}`);
-      }
-    });
+    this.server.setRequestHandler(CallToolRequestSchema, this.serverIntegration.getToolHandler());
   }
 
   /**
