@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "MCP server for GenSpec workflow - converts USER-STORIES.md into README, ROADMAP, and SYSTEM-ARCHITECTURE documents",
   "main": "dist/index.js",
+  "bin": {
+    "genspec-mcp": "dist/index.js"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc",

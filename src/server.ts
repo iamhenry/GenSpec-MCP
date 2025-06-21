@@ -71,6 +71,10 @@ export class GenSpecServer {
             description: 'Run full GenSpec workflow: README → ROADMAP → SYSTEM-ARCHITECTURE',
           },
           {
+            name: 'generate',
+            description: 'Alias for start-genspec: Run full GenSpec workflow',
+          },
+          {
             name: 'start-readme',
             description: 'Regenerate README, then continue through ROADMAP → SYSTEM-ARCHITECTURE',
           },

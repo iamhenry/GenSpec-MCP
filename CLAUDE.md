@@ -74,3 +74,36 @@ Generated files go to `_ai/docs/`:
 ## Testing
 
 Run `npm test` which executes `test-install.js` - validates project structure, build process, entry points, templates, and MCP capabilities.
+
+## Critical Bug Fixes & Troubleshooting
+
+### MCP Content Format Issue (RESOLVED)
+**Problem**: Claude Code crashes with ZodError when using prompts like `/generate` or `/genspec:start-genspec`
+```
+ZodError: Expected object, received array at path ["messages", 0, "content"]
+```
+
+**Root Cause**: MCP message responses were using `content: [...]` arrays instead of `content: {...}` objects.
+
+**Solution Applied**: 
+- Fixed prompt handler responses in `src/utils/serverIntegration.ts`
+- Fixed tool handler success/error responses 
+- Changed from `content: [{type: "text", text: "..."}]` to `content: {type: "text", text: "..."}`
+
+**Files Modified**: `src/utils/serverIntegration.ts` (lines 70-81, 92-102, 148-158, 167-177, 180-190)
+
+**Verification**: 
+- All MCP prompts now work without crashes
+- Tool execution returns properly formatted responses
+- Global installation via `npm install -g .` required for Claude Code integration
+
+### MCP Server Configuration
+**Requirements**:
+- Must install globally: `npm install -g .` 
+- Claude Code configuration: `claude mcp add genspec genspec-mcp -s user`
+- Server command: `genspec-mcp` (not local path)
+
+**Debugging Commands**:
+- `claude mcp list` - Verify server registration
+- `node test-fixed-prompt.js` - Test prompt responses locally
+- `genspec-mcp` - Test global binary directly
