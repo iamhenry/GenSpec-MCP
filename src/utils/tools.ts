@@ -22,9 +22,11 @@ import {
 } from '../types.js';
 import { ValidationManager } from './validation.js';
 import { logger } from './logging.js';
+import { PhaseManager } from './phases.js';
 
 export class ToolManager {
   private validationManager: ValidationManager;
+  private phaseManager: PhaseManager;
   private workflowStates: Map<string, WorkflowState> = new Map();
   private workspace: string;
   private docsDir: string;
@@ -33,6 +35,7 @@ export class ToolManager {
     this.workspace = workspace;
     this.docsDir = join(workspace, '_ai', 'docs');
     this.validationManager = new ValidationManager(workspace);
+    this.phaseManager = new PhaseManager();
   }
 
   /**
@@ -58,13 +61,6 @@ export class ToolManager {
 
     try {
       console.log('[ToolManager] Starting validation checks...');
-      // Check if workflow is already active
-      console.log('[ToolManager] Checking if workflow is active...');
-      if (this.isWorkflowActive(this.workspace)) {
-        console.log('[ToolManager] ERROR: Workflow already active');
-        throw new Error('ERR_WORKFLOW_IN_PROGRESS: Another workflow is currently in progress');
-      }
-      console.log('[ToolManager] Workflow not active, proceeding...');
 
       // Validate user stories
       console.log('[ToolManager] Validating user stories...');
@@ -74,17 +70,17 @@ export class ToolManager {
       );
       console.log(`[ToolManager] User story validation result: ${JSON.stringify(userStoryValidation)}`);
       if (!userStoryValidation.isValid) {
-        console.log(`[ToolManager] ERROR: User story validation failed: ${userStoryValidation.error}`);
-        throw new Error(userStoryValidation.error);
+        console.log(`[ToolManager] ERROR: User story validation failed: ${userStoryValidation.errors.join(', ')}`);
+        throw new Error(userStoryValidation.errors.join(', '));
       }
 
       // Validate environment
       console.log('[ToolManager] Validating environment...');
-      const envValidation = this.validationManager.validateEnvironment();
+      const envValidation = await this.validationManager.validateEnvironment();
       console.log(`[ToolManager] Environment validation result: ${JSON.stringify(envValidation)}`);
       if (!envValidation.isValid) {
-        console.log(`[ToolManager] ERROR: Environment validation failed: ${envValidation.error}`);
-        throw new Error(envValidation.error);
+        console.log(`[ToolManager] ERROR: Environment validation failed: ${envValidation.errors.join(', ')}`);
+        throw new Error(envValidation.errors.join(', '));
       }
 
       // Create docs directory if it doesn't exist
@@ -92,14 +88,31 @@ export class ToolManager {
       this.ensureDocsDirectory();
       console.log('[ToolManager] Docs directory ready');
 
-      // Set workflow as active
-      console.log('[ToolManager] Setting workflow as active...');
-      this.setWorkflowActive(this.workspace, true, Phase.README);
-      console.log('[ToolManager] Workflow set to active');
+      // Workflow state management removed - tools are now stateless
 
       // Log workflow start
       console.log('[ToolManager] Logging workflow start...');
       this.logWorkflowStart(toolName, Phase.README);
+
+      // Get user story content
+      console.log('[ToolManager] Getting user story content...');
+      const userStoryContent = await this.validationManager.getUserStoryContent(
+        args.userStory,
+        args.userStoryUri
+      );
+      console.log('[ToolManager] User story content retrieved');
+
+      // Execute README phase
+      console.log('[ToolManager] Executing README phase...');
+      const phaseResult = await this.phaseManager.executePhase(Phase.README, {
+        userStories: userStoryContent,
+        workspace: this.workspace
+      });
+
+      if (!phaseResult.success) {
+        console.log(`[ToolManager] Phase execution failed: ${phaseResult.error}`);
+        throw new Error(phaseResult.error || 'Phase execution failed');
+      }
 
       const draftPath = join(this.docsDir, 'README.md');
       console.log(`[ToolManager] Draft path: ${draftPath}`);
@@ -121,8 +134,6 @@ export class ToolManager {
         console.error(`[ToolManager] Error message: ${error.message}`);
         console.error(`[ToolManager] Error stack: ${error.stack}`);
       }
-      console.error(`[ToolManager] Clearing workflow state due to error`);
-      this.setWorkflowActive(this.workspace, false);
       throw error;
     }
   }
@@ -139,28 +150,35 @@ export class ToolManager {
     
     try {
       console.log('[ToolManager] Starting validation checks...');
-      // Check if workflow is already active
-      console.log('[ToolManager] Checking if workflow is active...');
-      if (this.isWorkflowActive(this.workspace)) {
-        console.log('[ToolManager] ERROR: Workflow already active');
-        throw new Error('ERR_WORKFLOW_IN_PROGRESS: Another workflow is currently in progress');
-      }
-      console.log('[ToolManager] Workflow not active, proceeding...');
 
       // Validate environment
-      const envValidation = this.validationManager.validateEnvironment();
+      const envValidation = await this.validationManager.validateEnvironment();
       if (!envValidation.isValid) {
-        throw new Error(envValidation.error);
+        throw new Error(envValidation.errors.join(', '));
       }
 
       // Create docs directory if it doesn't exist
       this.ensureDocsDirectory();
 
-      // Set workflow as active
-      this.setWorkflowActive(this.workspace, true, Phase.README);
-
       // Log workflow start
       this.logWorkflowStart(toolName, Phase.README);
+
+      // Get user story content from local USER-STORIES.md (generate_readme doesn't take args)
+      console.log('[ToolManager] Getting user story content from local sources...');
+      const userStoryContent = await this.validationManager.getUserStoryContent();
+      console.log('[ToolManager] User story content retrieved');
+
+      // Execute README phase
+      console.log('[ToolManager] Executing README phase...');
+      const phaseResult = await this.phaseManager.executePhase(Phase.README, {
+        userStories: userStoryContent,
+        workspace: this.workspace
+      });
+
+      if (!phaseResult.success) {
+        console.log(`[ToolManager] Phase execution failed: ${phaseResult.error}`);
+        throw new Error(phaseResult.error || 'Phase execution failed');
+      }
 
       const draftPath = join(this.docsDir, 'README.md');
       console.log(`[ToolManager] Draft path: ${draftPath}`);
@@ -176,7 +194,6 @@ export class ToolManager {
       return result;
     } catch (error) {
       console.error(`[ToolManager] Error executing ${toolName}: ${error}`);
-      this.setWorkflowActive(this.workspace, false);
       throw error;
     }
   }
@@ -193,34 +210,42 @@ export class ToolManager {
     
     try {
       console.log('[ToolManager] Starting validation checks...');
-      // Check if workflow is already active
-      console.log('[ToolManager] Checking if workflow is active...');
-      if (this.isWorkflowActive(this.workspace)) {
-        console.log('[ToolManager] ERROR: Workflow already active');
-        throw new Error('ERR_WORKFLOW_IN_PROGRESS: Another workflow is currently in progress');
-      }
-      console.log('[ToolManager] Workflow not active, proceeding...');
 
       // Validate dependency matrix
-      const depValidation = this.validationManager.validateDependencyMatrix(toolName);
+      const depValidation = await this.validationManager.validateDependencyMatrix(toolName);
       if (!depValidation.isValid) {
-        throw new Error(depValidation.error);
+        console.log(`[ToolManager] Dependency validation failed: ${depValidation.errors.join(', ')}`);
+        throw new Error(depValidation.errors.join(', '));
       }
 
       // Validate environment
-      const envValidation = this.validationManager.validateEnvironment();
+      const envValidation = await this.validationManager.validateEnvironment();
       if (!envValidation.isValid) {
-        throw new Error(envValidation.error);
+        throw new Error(envValidation.errors.join(', '));
       }
 
       // Create docs directory if it doesn't exist
       this.ensureDocsDirectory();
 
-      // Set workflow as active
-      this.setWorkflowActive(this.workspace, true, Phase.ROADMAP);
-
       // Log workflow start
       this.logWorkflowStart(toolName, Phase.ROADMAP);
+
+      // Get user story content from local USER-STORIES.md
+      console.log('[ToolManager] Getting user story content from local sources...');
+      const userStoryContent = await this.validationManager.getUserStoryContent();
+      console.log('[ToolManager] User story content retrieved');
+
+      // Execute ROADMAP phase
+      console.log('[ToolManager] Executing ROADMAP phase...');
+      const phaseResult = await this.phaseManager.executePhase(Phase.ROADMAP, {
+        userStories: userStoryContent,
+        workspace: this.workspace
+      });
+
+      if (!phaseResult.success) {
+        console.log(`[ToolManager] Phase execution failed: ${phaseResult.error}`);
+        throw new Error(phaseResult.error || 'Phase execution failed');
+      }
 
       const draftPath = join(this.docsDir, 'ROADMAP.md');
       console.log(`[ToolManager] Draft path: ${draftPath}`);
@@ -236,7 +261,6 @@ export class ToolManager {
       return result;
     } catch (error) {
       console.error(`[ToolManager] Error executing ${toolName}: ${error}`);
-      this.setWorkflowActive(this.workspace, false);
       throw error;
     }
   }
@@ -253,34 +277,42 @@ export class ToolManager {
     
     try {
       console.log('[ToolManager] Starting validation checks...');
-      // Check if workflow is already active
-      console.log('[ToolManager] Checking if workflow is active...');
-      if (this.isWorkflowActive(this.workspace)) {
-        console.log('[ToolManager] ERROR: Workflow already active');
-        throw new Error('ERR_WORKFLOW_IN_PROGRESS: Another workflow is currently in progress');
-      }
-      console.log('[ToolManager] Workflow not active, proceeding...');
 
       // Validate dependency matrix
-      const depValidation = this.validationManager.validateDependencyMatrix(toolName);
+      const depValidation = await this.validationManager.validateDependencyMatrix(toolName);
       if (!depValidation.isValid) {
-        throw new Error(depValidation.error);
+        console.log(`[ToolManager] Dependency validation failed: ${depValidation.errors.join(', ')}`);
+        throw new Error(depValidation.errors.join(', '));
       }
 
       // Validate environment
-      const envValidation = this.validationManager.validateEnvironment();
+      const envValidation = await this.validationManager.validateEnvironment();
       if (!envValidation.isValid) {
-        throw new Error(envValidation.error);
+        throw new Error(envValidation.errors.join(', '));
       }
 
       // Create docs directory if it doesn't exist
       this.ensureDocsDirectory();
 
-      // Set workflow as active
-      this.setWorkflowActive(this.workspace, true, Phase.SYSTEM_ARCHITECTURE);
-
       // Log workflow start
       this.logWorkflowStart(toolName, Phase.SYSTEM_ARCHITECTURE);
+
+      // Get user story content from local USER-STORIES.md
+      console.log('[ToolManager] Getting user story content from local sources...');
+      const userStoryContent = await this.validationManager.getUserStoryContent();
+      console.log('[ToolManager] User story content retrieved');
+
+      // Execute SYSTEM_ARCHITECTURE phase
+      console.log('[ToolManager] Executing SYSTEM_ARCHITECTURE phase...');
+      const phaseResult = await this.phaseManager.executePhase(Phase.SYSTEM_ARCHITECTURE, {
+        userStories: userStoryContent,
+        workspace: this.workspace
+      });
+
+      if (!phaseResult.success) {
+        console.log(`[ToolManager] Phase execution failed: ${phaseResult.error}`);
+        throw new Error(phaseResult.error || 'Phase execution failed');
+      }
 
       const draftPath = join(this.docsDir, 'SYSTEM-ARCHITECTURE.md');
       console.log(`[ToolManager] Draft path: ${draftPath}`);
@@ -296,7 +328,6 @@ export class ToolManager {
       return result;
     } catch (error) {
       console.error(`[ToolManager] Error executing ${toolName}: ${error}`);
-      this.setWorkflowActive(this.workspace, false);
       throw error;
     }
   }
@@ -351,10 +382,10 @@ export class ToolManager {
 
   /**
    * Check if workflow is active for workspace
+   * DISABLED: Tools are now stateless
    */
   private isWorkflowActive(workspace: string): boolean {
-    const state = this.workflowStates.get(workspace);
-    return state?.isActive || false;
+    return false; // Always return false - tools are stateless
   }
 
   /**

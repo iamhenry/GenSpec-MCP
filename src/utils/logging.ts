@@ -142,6 +142,37 @@ export class Logger {
   }
 
   /**
+   * Log MCP protocol events
+   */
+  logMCPEvent(eventType: string, details: any): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[GenSpec MCP] ${timestamp} - MCP_EVENT: ${eventType}`);
+    console.log(`[GenSpec MCP] Details: ${JSON.stringify(details, null, 2)}`);
+  }
+
+  /**
+   * Log server lifecycle events
+   */
+  logServerEvent(event: string, details?: any): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[GenSpec MCP] ${timestamp} - SERVER: ${event}`);
+    if (details) {
+      console.log(`[GenSpec MCP] Details: ${JSON.stringify(details, null, 2)}`);
+    }
+  }
+
+  /**
+   * Log detailed execution trace
+   */
+  logTrace(source: string, message: string, data?: any): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[GenSpec MCP] ${timestamp} - TRACE [${source}]: ${message}`);
+    if (data) {
+      console.log(`[GenSpec MCP] Data: ${JSON.stringify(data, null, 2)}`);
+    }
+  }
+
+  /**
    * Log warning events
    */
   logWarning(message: string, user: string = 'user'): void {

@@ -31,6 +31,7 @@ import {
 } from './utils/trackBIntegration.js';
 
 import { ServerIntegration } from './utils/serverIntegration.js';
+import { logger } from './utils/logging.js';
 
 export class GenSpecServer {
   private server: Server;
@@ -43,12 +44,15 @@ export class GenSpecServer {
   }
 
   async initialize(): Promise<void> {
+    logger.logServerEvent('INITIALIZATION_START');
+    
     // Set up MCP handlers
     this.setupPromptHandlers();
     this.setupResourceHandlers();
     this.setupToolHandlers();
 
     console.error('[GenSpec MCP] Server initialized with all handlers');
+    logger.logServerEvent('INITIALIZATION_COMPLETE');
   }
 
   /**
@@ -56,6 +60,8 @@ export class GenSpecServer {
    * Handles: /start-genspec, /start-readme, /start-roadmap, /start-arch
    */
   private setupPromptHandlers(): void {
+    logger.logTrace('SERVER_SETUP', 'Setting up prompt handlers');
+    
     // List available prompts
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
       return {
@@ -89,6 +95,8 @@ export class GenSpecServer {
    * Handles: template:// URI scheme for template access
    */
   private setupResourceHandlers(): void {
+    logger.logTrace('SERVER_SETUP', 'Setting up resource handlers');
+    
     // List available resources - integrated with Track B
     this.server.setRequestHandler(ListResourcesRequestSchema, handleListResourcesRequest);
 
@@ -101,6 +109,8 @@ export class GenSpecServer {
    * Handles: start_genspec, generate_readme, generate_roadmap, generate_architecture
    */
   private setupToolHandlers(): void {
+    logger.logTrace('SERVER_SETUP', 'Setting up tool handlers');
+    
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {

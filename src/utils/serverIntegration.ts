@@ -31,7 +31,10 @@ export class ServerIntegration {
     return async (request: any) => {
       const { name, arguments: args } = request.params;
       
+      logger.logMCPEvent('TOOL_CALL_RECEIVED', { toolName: name, params: request.params });
+      
       logger.logToolExecution(name, args);
+      logger.logTrace('TOOL_HANDLER', `Starting execution of tool: ${name}`, args);
 
       try {
         let result;
@@ -58,7 +61,7 @@ export class ServerIntegration {
         }
 
         // Return success response with tool output schema
-        return {
+        const successResponse = {
           content: [
             {
               type: 'text',
@@ -73,12 +76,16 @@ export class ServerIntegration {
           ],
           isError: false,
         };
+        
+        logger.logTrace('TOOL_HANDLER', `Tool ${name} completed successfully`, successResponse);
+        return successResponse;
 
       } catch (error) {
         logger.logError(`Tool execution: ${name}`, error instanceof Error ? error : new Error(String(error)));
+        logger.logTrace('TOOL_HANDLER', `Tool ${name} failed with error`, { error: error instanceof Error ? error.message : String(error) });
         
         // Return error response
-        return {
+        const errorResponse = {
           content: [
             {
               type: 'text',
@@ -92,6 +99,9 @@ export class ServerIntegration {
           ],
           isError: true,
         };
+        
+        logger.logMCPEvent('TOOL_CALL_ERROR', errorResponse);
+        return errorResponse;
       }
     };
   }

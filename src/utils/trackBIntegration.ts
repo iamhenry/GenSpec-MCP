@@ -94,7 +94,7 @@ export async function ensureDocsDirectory(): Promise<void> {
  * 
  * Usage: Call this during server initialization to validate templates
  */
-export function validateTemplateSystem(): { isValid: boolean; errors: string[] } {
+export async function validateTemplateSystem(): Promise<{ isValid: boolean; errors: string[] }> {
   const errors: string[] = [];
   
   try {
@@ -104,9 +104,9 @@ export function validateTemplateSystem(): { isValid: boolean; errors: string[] }
     }
     
     // Validate individual template files
-    const validation = templateManager.validateTemplates();
+    const validation = await templateManager.validateTemplates();
     if (!validation.isValid) {
-      validation.missingFiles.forEach(file => {
+      validation.missingFiles.forEach((file: string) => {
         errors.push(`Missing template file: ${file}`);
       });
     }

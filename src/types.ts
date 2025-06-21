@@ -63,6 +63,35 @@ export interface TemplateData {
   filePath: string;
 }
 
+// Enhanced template metadata interface
+export interface TemplateMetadata {
+  sectionCount: number;
+  requirementCount: number;
+  exampleCount: number;
+  instructionCount: number;
+  structureElements: string[];
+  requirements: string[];
+  examples: string[];
+  checksum: string;
+  lastModified: Date;
+  fileSize: number;
+}
+
+// Template validation result
+export interface TemplateValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  metadata?: TemplateMetadata;
+}
+
+// Enhanced template data with metadata
+export interface EnhancedTemplateData extends TemplateData {
+  metadata: TemplateMetadata;
+  isValid: boolean;
+  validationErrors: string[];
+}
+
 // Tool execution context
 export interface ToolContext {
   workspace: string;
@@ -83,6 +112,64 @@ export interface ValidationResult {
   isValid: boolean;
   error?: string;
   missingPrerequisites?: Phase[];
+}
+
+// Enhanced validation result interfaces
+export interface ComprehensiveValidationResult extends ValidationResult {
+  warnings?: string[];
+  recommendations?: string[];
+  metadata?: {
+    source: 'inline' | 'uri' | 'local_file' | 'validation';
+    contentLength: number;
+    wordCount: number;
+    lastValidated: Date;
+  };
+}
+
+export interface EnvironmentValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  checks: {
+    templatesDirectory: boolean;
+    templateFiles: boolean;
+    outputDirectory: boolean;
+    permissions: boolean;
+    dependencies: boolean;
+  };
+  recommendations: string[];
+  summary: {
+    totalChecks: number;
+    passedChecks: number;
+    failedChecks: number;
+    warningCount: number;
+  };
+}
+
+export interface UserStoryValidationResult {
+  isValid: boolean;
+  source: 'inline' | 'uri' | 'local_file' | 'none';
+  content?: string;
+  errors: string[];
+  warnings: string[];
+  metadata: {
+    contentLength: number;
+    wordCount: number;
+    sectionCount: number;
+    hasStructure: boolean;
+    hasRequirements: boolean;
+    hasAcceptanceCriteria: boolean;
+  };
+  recommendations: string[];
+}
+
+export interface DependencyValidationResult {
+  isValid: boolean;
+  errors: string[];
+  missingDependencies: string[];
+  availableDependencies: string[];
+  dependencyGraph: Record<string, string[]>;
+  recommendations: string[];
 }
 
 // Workflow state
