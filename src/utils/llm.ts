@@ -1,8 +1,10 @@
 /**
  * Document Generation Interface for GenSpec MCP Server
- * Handles system prompt building and generation interface (client manages all LLM calls)
+ * Handles system prompt building, user story fetching, and generation interface (client manages all LLM calls)
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { 
   GenerationContext, 
   GenerationResult, 
@@ -20,12 +22,28 @@ export interface SystemPromptData {
   previousPhases: string;
   phase: Phase;
   phaseName: string;
+  templateMetadata: {
+    filePath: string;
+    uri: string;
+    sectionCount: number;
+    requirementCount: number;
+  };
 }
 
 export interface GenerationRequest {
   systemPrompt: string;
   context: GenerationContext;
   editFeedback?: string;
+  templateGuidence: {
+    structure: string[];
+    requirements: string[];
+    examples: string[];
+  };
+  qualityMetrics: {
+    minWordCount: number;
+    requiredSections: string[];
+    validationRules: string[];
+  };
 }
 
 export class DocumentGenerator {
@@ -54,13 +72,22 @@ export class DocumentGenerator {
       // Build comprehensive context data
       const contextData = this.buildContextData(context, previousPhasesText, editFeedback);
 
+      // Extract template metadata for better prompt generation
+      const templateMetadata = this.extractTemplateMetadata(templateData.content);
+
       const systemPromptData: SystemPromptData = {
         templateContent: templateData.content,
         contextData,
         userStories: context.userStories,
         previousPhases: previousPhasesText,
         phase: context.phase,
-        phaseName: PHASE_NAMES[context.phase]
+        phaseName: PHASE_NAMES[context.phase],
+        templateMetadata: {
+          filePath: templateData.filePath,
+          uri: templateData.uri,
+          sectionCount: templateMetadata.sectionCount,
+          requirementCount: templateMetadata.requirementCount
+        }
       };
 
       return systemPromptData;
@@ -82,10 +109,18 @@ export class DocumentGenerator {
     // Combine all components into final system prompt
     const systemPrompt = this.combineSystemPrompt(promptData, editFeedback);
 
+    // Extract template guidance for better generation
+    const templateGuidence = this.extractTemplateGuidance(promptData.templateContent);
+    
+    // Define quality metrics based on phase
+    const qualityMetrics = this.defineQualityMetrics(context.phase);
+
     return {
       systemPrompt,
       context,
-      editFeedback
+      editFeedback,
+      templateGuidence,
+      qualityMetrics
     };
   }
 
@@ -131,8 +166,17 @@ export class DocumentGenerator {
       throw new Error('Edit feedback cannot be empty');
     }
 
-    // Create new generation request with edit feedback
-    return await this.createGenerationRequest(context, editFeedback);
+    // Parse edit feedback for specific improvement areas
+    const parsedFeedback = this.parseEditFeedback(editFeedback);
+    
+    // Create enhanced generation request with structured feedback
+    const request = await this.createGenerationRequest(context, editFeedback);
+    
+    // Enhance request with parsed feedback insights
+    request.templateGuidence.requirements.push(...parsedFeedback.requirements);
+    request.qualityMetrics.validationRules.push(...parsedFeedback.validationRules);
+
+    return request;
   }
 
   /**
@@ -320,6 +364,298 @@ export class DocumentGenerator {
    */
   async getExistingContent(phase: Phase): Promise<string | null> {
     return await this.documentWriter.readExistingDocument(phase);
+  }
+
+  /**
+   * Fetch user stories from URL or local file
+   * @param userStoryUri - URI to fetch user stories from
+   * @returns User stories content as string
+   */
+  async fetchUserStories(userStoryUri: string): Promise<string> {
+    try {
+      if (userStoryUri.startsWith('http://') || userStoryUri.startsWith('https://')) {
+        // Fetch from URL
+        return await this.fetchUserStoriesFromUrl(userStoryUri);
+      } else {
+        // Fetch from local file
+        return await this.fetchUserStoriesFromFile(userStoryUri);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to fetch user stories from ${userStoryUri}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Fetch user stories from URL
+   */
+  private async fetchUserStoriesFromUrl(url: string): Promise<string> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const content = await response.text();
+      if (!content || content.trim().length === 0) {
+        throw new Error('URL returned empty content');
+      }
+      
+      return content;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to fetch from URL');
+    }
+  }
+
+  /**
+   * Fetch user stories from local file
+   */
+  private async fetchUserStoriesFromFile(filePath: string): Promise<string> {
+    try {
+      // Handle relative paths
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+      
+      if (!fs.existsSync(absolutePath)) {
+        throw new Error(`File not found: ${absolutePath}`);
+      }
+      
+      const content = await fs.promises.readFile(absolutePath, 'utf-8');
+      if (!content || content.trim().length === 0) {
+        throw new Error('File is empty');
+      }
+      
+      return content;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to read file');
+    }
+  }
+
+  /**
+   * Resolve user stories from multiple sources with fallbacks
+   * @param userStory - Inline user story content
+   * @param userStoryUri - URI to user story file/URL
+   * @returns Resolved user stories content
+   */
+  async resolveUserStories(userStory?: string, userStoryUri?: string): Promise<string> {
+    // Priority 1: Inline user story parameter
+    if (userStory && userStory.trim().length > 0) {
+      return userStory;
+    }
+    
+    // Priority 2: URI reference
+    if (userStoryUri && userStoryUri.trim().length > 0) {
+      try {
+        return await this.fetchUserStories(userStoryUri);
+      } catch (error) {
+        console.warn(`Failed to fetch user stories from URI ${userStoryUri}:`, error);
+        // Continue to fallback
+      }
+    }
+    
+    // Priority 3: Local USER-STORIES.md file fallback
+    const localFilePath = path.resolve(process.cwd(), 'USER-STORIES.md');
+    if (fs.existsSync(localFilePath)) {
+      try {
+        return await this.fetchUserStoriesFromFile(localFilePath);
+      } catch (error) {
+        console.warn(`Failed to read local USER-STORIES.md file:`, error);
+      }
+    }
+    
+    throw new Error('No user stories provided. Please provide userStory parameter, userStoryUri, or create USER-STORIES.md file.');
+  }
+
+  /**
+   * Validate generated content quality
+   * @param content - Generated content to validate
+   * @param phase - Phase for validation context
+   * @param qualityMetrics - Quality metrics to check against
+   * @returns Validation result with quality score
+   */
+  async validateContentQuality(content: string, phase: Phase, qualityMetrics: any): Promise<{
+    isValid: boolean;
+    score: number;
+    issues: string[];
+    suggestions: string[];
+  }> {
+    const issues: string[] = [];
+    const suggestions: string[] = [];
+    let score = 100;
+
+    // Check minimum word count
+    const wordCount = content.split(/\s+/).length;
+    if (wordCount < qualityMetrics.minWordCount) {
+      issues.push(`Content too short: ${wordCount} words, minimum ${qualityMetrics.minWordCount}`);
+      suggestions.push('Add more detailed explanations and examples');
+      score -= 20;
+    }
+
+    // Check required sections
+    for (const section of qualityMetrics.requiredSections) {
+      if (!content.toLowerCase().includes(section.toLowerCase())) {
+        issues.push(`Missing required section: ${section}`);
+        suggestions.push(`Add ${section} section with relevant content`);
+        score -= 15;
+      }
+    }
+
+    // Check validation rules
+    for (const rule of qualityMetrics.validationRules) {
+      if (!this.checkValidationRule(content, rule)) {
+        issues.push(`Validation rule failed: ${rule}`);
+        suggestions.push(`Ensure content meets requirement: ${rule}`);
+        score -= 10;
+      }
+    }
+
+    return {
+      isValid: score >= 70, // 70% minimum quality score
+      score: Math.max(0, score),
+      issues,
+      suggestions
+    };
+  }
+
+  /**
+   * Extract template metadata for enhanced prompt generation
+   */
+  private extractTemplateMetadata(templateContent: string): {
+    sectionCount: number;
+    requirementCount: number;
+  } {
+    const sections = (templateContent.match(/^#{1,6}\s/gm) || []).length;
+    const requirements = (templateContent.match(/must|should|requirement|mandatory/gi) || []).length;
+    
+    return {
+      sectionCount: sections,
+      requirementCount: requirements
+    };
+  }
+
+  /**
+   * Extract template guidance for generation
+   */
+  private extractTemplateGuidance(templateContent: string): {
+    structure: string[];
+    requirements: string[];
+    examples: string[];
+  } {
+    const lines = templateContent.split('\n');
+    const structure: string[] = [];
+    const requirements: string[] = [];
+    const examples: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('#')) {
+        structure.push(trimmed);
+      } else if (trimmed.toLowerCase().includes('must') || trimmed.toLowerCase().includes('should')) {
+        requirements.push(trimmed);
+      } else if (trimmed.toLowerCase().includes('example') || trimmed.startsWith('```')) {
+        examples.push(trimmed);
+      }
+    }
+
+    return { structure, requirements, examples };
+  }
+
+  /**
+   * Define quality metrics based on phase
+   */
+  private defineQualityMetrics(phase: Phase): {
+    minWordCount: number;
+    requiredSections: string[];
+    validationRules: string[];
+  } {
+    const baseMetrics = {
+      minWordCount: 500,
+      requiredSections: [],
+      validationRules: ['Contains structured content', 'Has clear headings']
+    };
+
+    switch (phase) {
+      case Phase.README:
+        return {
+          ...baseMetrics,
+          minWordCount: 400,
+          requiredSections: ['Overview', 'Features', 'Getting Started'],
+          validationRules: [...baseMetrics.validationRules, 'Has project title', 'Contains installation instructions']
+        };
+      case Phase.ROADMAP:
+        return {
+          ...baseMetrics,
+          minWordCount: 600,
+          requiredSections: ['Development Strategy', 'Milestones', 'Timeline'],
+          validationRules: [...baseMetrics.validationRules, 'Has development phases', 'Contains timeline information']
+        };
+      case Phase.SYSTEM_ARCHITECTURE:
+        return {
+          ...baseMetrics,
+          minWordCount: 800,
+          requiredSections: ['System Components', 'Technology Stack', 'Data Flow'],
+          validationRules: [...baseMetrics.validationRules, 'Has architecture diagrams or descriptions', 'Contains technical details']
+        };
+      default:
+        return baseMetrics;
+    }
+  }
+
+  /**
+   * Parse edit feedback for structured improvements
+   */
+  private parseEditFeedback(editFeedback: string): {
+    requirements: string[];
+    validationRules: string[];
+  } {
+    const requirements: string[] = [];
+    const validationRules: string[] = [];
+    
+    const lines = editFeedback.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim().toLowerCase();
+      if (trimmed.includes('add') || trimmed.includes('include')) {
+        requirements.push(line.trim());
+      } else if (trimmed.includes('ensure') || trimmed.includes('make sure')) {
+        validationRules.push(line.trim());
+      }
+    }
+    
+    return { requirements, validationRules };
+  }
+
+  /**
+   * Check validation rule against content
+   */
+  private checkValidationRule(content: string, rule: string): boolean {
+    const contentLower = content.toLowerCase();
+    const ruleLower = rule.toLowerCase();
+    
+    if (ruleLower.includes('structured content')) {
+      return (content.match(/^#{1,6}\s/gm) || []).length >= 3;
+    }
+    if (ruleLower.includes('clear headings')) {
+      return (content.match(/^#{1,3}\s/gm) || []).length >= 2;
+    }
+    if (ruleLower.includes('project title')) {
+      return /^#\s/.test(content);
+    }
+    if (ruleLower.includes('installation instructions')) {
+      return contentLower.includes('install') || contentLower.includes('setup');
+    }
+    if (ruleLower.includes('development phases')) {
+      return contentLower.includes('phase') || contentLower.includes('milestone');
+    }
+    if (ruleLower.includes('timeline')) {
+      return contentLower.includes('week') || contentLower.includes('month') || contentLower.includes('timeline');
+    }
+    
+    return true; // Default to true for unknown rules
   }
 }
 
