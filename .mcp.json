@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "genspec": {
+      "type": "stdio",
+      "command": "genspec-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

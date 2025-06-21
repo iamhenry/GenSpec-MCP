@@ -69,4 +69,13 @@ temp/
 docs/api/
 
 # Test output
-test-results/ 
+test-results/
+
+# MCP Generated content (keep as examples but don't track changes)
+_ai/
+
+# Temporary test files
+test-*.js
+
+# Build artifacts
+*.tgz 
