@@ -121,15 +121,17 @@ export class ServerIntegration {
 
       // Return a message that instructs the client to call the mapped tool
       // Note: MCP prompts should return messages with valid content types (text, image, audio, resource)
-      // tool_use is not a valid content type for prompt messages
+      // The content field must be an array of content blocks
       return {
         messages: [
           {
             role: 'assistant',
-            content: {
-              type: 'text',
-              text: `To execute the ${name} workflow, please call the ${toolName} tool with appropriate arguments. This will start the GenSpec documentation generation process.`,
-            },
+            content: [
+              {
+                type: 'text',
+                text: `To execute the ${name} workflow, please call the ${toolName} tool with appropriate arguments. This will start the GenSpec documentation generation process.`,
+              },
+            ],
           },
         ],
       };
