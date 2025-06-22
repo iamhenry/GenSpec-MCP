@@ -75,6 +75,28 @@ Generated files go to `_ai/docs/`:
 
 Run `npm test` which executes `test-install.js` - validates project structure, build process, entry points, templates, and MCP capabilities.
 
+## MCP Prompt Commands
+
+### Available Commands
+- `/genspec:start-genspec` - Run full workflow (README → ROADMAP → SYSTEM-ARCHITECTURE)
+- `/genspec:generate` - Alias for start-genspec
+- `/genspec:start-readme` - Generate README, then continue to ROADMAP → SYSTEM-ARCHITECTURE  
+- `/genspec:start-roadmap` - Generate ROADMAP, then continue to SYSTEM-ARCHITECTURE
+- `/genspec:start-arch` - Generate only SYSTEM-ARCHITECTURE
+
+### Arguments Support
+All commands support optional arguments:
+- `--userStory "content"` - Provide user stories inline
+- `--userStoryUri "url"` - Provide URL/path to user stories file
+
+### Usage Examples
+```
+/genspec:start-genspec
+/genspec:start-genspec --userStory "As a user, I want to..."
+/genspec:start-genspec --userStoryUri "https://gist.githubusercontent.com/..."
+/genspec:generate --userStoryUri "./USER-STORIES.md"
+```
+
 ## Critical Bug Fixes & Troubleshooting
 
 ### MCP Content Format Issue (RESOLVED)

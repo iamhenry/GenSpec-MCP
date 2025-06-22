@@ -69,22 +69,82 @@ export class GenSpecServer {
           {
             name: 'start-genspec',
             description: 'Run full GenSpec workflow: README → ROADMAP → SYSTEM-ARCHITECTURE',
+            arguments: [
+              {
+                name: 'userStory',
+                description: 'Raw markdown content of the user stories',
+                required: false
+              },
+              {
+                name: 'userStoryUri',
+                description: 'URI that resolves to the user-story markdown',
+                required: false
+              }
+            ]
           },
           {
             name: 'generate',
             description: 'Alias for start-genspec: Run full GenSpec workflow',
+            arguments: [
+              {
+                name: 'userStory',
+                description: 'Raw markdown content of the user stories',
+                required: false
+              },
+              {
+                name: 'userStoryUri',
+                description: 'URI that resolves to the user-story markdown',
+                required: false
+              }
+            ]
           },
           {
             name: 'start-readme',
             description: 'Regenerate README, then continue through ROADMAP → SYSTEM-ARCHITECTURE',
+            arguments: [
+              {
+                name: 'userStory',
+                description: 'Raw markdown content of the user stories',
+                required: false
+              },
+              {
+                name: 'userStoryUri',
+                description: 'URI that resolves to the user-story markdown',
+                required: false
+              }
+            ]
           },
           {
             name: 'start-roadmap',
             description: 'Start at ROADMAP, then continue through SYSTEM-ARCHITECTURE',
+            arguments: [
+              {
+                name: 'userStory',
+                description: 'Raw markdown content of the user stories',
+                required: false
+              },
+              {
+                name: 'userStoryUri',
+                description: 'URI that resolves to the user-story markdown',
+                required: false
+              }
+            ]
           },
           {
             name: 'start-arch',
             description: 'Generate only SYSTEM-ARCHITECTURE',
+            arguments: [
+              {
+                name: 'userStory',
+                description: 'Raw markdown content of the user stories',
+                required: false
+              },
+              {
+                name: 'userStoryUri',
+                description: 'URI that resolves to the user-story markdown',
+                required: false
+              }
+            ]
           },
         ],
       };

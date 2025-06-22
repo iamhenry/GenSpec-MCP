@@ -114,11 +114,12 @@ export class ServerIntegration {
   getPromptHandler() {
     return async (request: any) => {
       try {
-        const { name } = request.params;
+        const { name, arguments: args } = request.params;
         
         console.log(`[ServerIntegration] === DEBUG: PROMPT_HANDLER START ===`);
         console.log(`[ServerIntegration] Raw prompt name: "${name}"`);
         console.log(`[ServerIntegration] Request params: ${JSON.stringify(request.params, null, 2)}`);
+        console.log(`[ServerIntegration] Arguments: ${JSON.stringify(args, null, 2)}`);
         
         logger.logInfo(`Prompt requested: ${name}`);
 
@@ -154,21 +155,69 @@ export class ServerIntegration {
           };
         }
 
-        console.log(`[ServerIntegration] Returning tool call instruction for: ${toolName}`);
+        // Extract user story arguments from prompt
+        const toolArgs: { userStory?: string; userStoryUri?: string } = {};
+        if (args?.userStory) {
+          toolArgs.userStory = args.userStory;
+          console.log(`[ServerIntegration] Using userStory argument from prompt`);
+        }
+        if (args?.userStoryUri) {
+          toolArgs.userStoryUri = args.userStoryUri;
+          console.log(`[ServerIntegration] Using userStoryUri argument from prompt`);
+        }
+
+        console.log(`[ServerIntegration] Executing tool automatically: ${toolName} with args:`, toolArgs);
         
-        // Return a message that instructs the client to call the mapped tool
-        // This is safer than trying to execute tools directly in the prompt handler
-        return {
-          messages: [
-            {
-              role: 'assistant',
-              content: {
-                type: 'text',
-                text: `🚀 Executing ${cleanName} workflow...\n\nThis will call the \`${toolName}\` tool to start the GenSpec documentation generation process.`,
+        try {
+          // Execute the tool directly with the provided arguments
+          let result;
+          switch (toolName) {
+            case 'start_genspec':
+              result = await this.toolManager.executeStartGenspec(toolArgs);
+              break;
+            case 'generate_readme':
+              result = await this.toolManager.executeGenerateReadme();
+              break;
+            case 'generate_roadmap':
+              result = await this.toolManager.executeGenerateRoadmap();
+              break;
+            case 'generate_architecture':
+              result = await this.toolManager.executeGenerateArchitecture();
+              break;
+            default:
+              throw new Error(`Tool execution not implemented: ${toolName}`);
+          }
+
+          console.log(`[ServerIntegration] Tool execution successful: ${JSON.stringify(result)}`);
+          
+          // Return success message with workflow results
+          return {
+            messages: [
+              {
+                role: 'assistant',
+                content: {
+                  type: 'text',
+                  text: `✅ ${cleanName} workflow executed successfully!\n\n**Phase:** ${result.phase}\n**Next Action:** ${result.nextAction}\n**Draft Path:** ${result.draftPath}\n\nThe ${result.phase} document has been generated and is ready for review.`,
+                },
               },
-            },
-          ],
-        };
+            ],
+          };
+        } catch (toolError) {
+          console.error(`[ServerIntegration] Tool execution failed:`, toolError);
+          
+          // Return error message for tool execution failure
+          return {
+            messages: [
+              {
+                role: 'assistant',
+                content: {
+                  type: 'text',
+                  text: `❌ Failed to execute ${cleanName} workflow.\n\n**Error:** ${toolError instanceof Error ? toolError.message : String(toolError)}\n\nPlease check the arguments and try again.`,
+                },
+              },
+            ],
+          };
+        }
       } catch (globalError) {
         console.error(`[ServerIntegration] FATAL: Prompt handler crashed:`, globalError);
         
