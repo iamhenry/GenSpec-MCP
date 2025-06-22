@@ -22,6 +22,7 @@ import {
   PHASE_TEMPLATE_FILES,
 } from '../types.js';
 import { logger } from './logging.js';
+import { DocumentWriter } from './fileWriter.js';
 
 export class ValidationManager {
   private workspace: string;
@@ -30,6 +31,7 @@ export class ValidationManager {
   private validationCache: Map<string, { result: any; timestamp: number }> = new Map();
   private cacheEnabled: boolean;
   private maxCacheAge: number;
+  private fileWriter: DocumentWriter;
 
   constructor(workspace: string = process.cwd(), cacheEnabled: boolean = true, maxCacheAge: number = 2 * 60 * 1000) {
     this.workspace = workspace;
@@ -37,6 +39,7 @@ export class ValidationManager {
     this.docsDir = join(workspace, '_ai', 'docs');
     this.cacheEnabled = cacheEnabled;
     this.maxCacheAge = maxCacheAge;
+    this.fileWriter = new DocumentWriter(this.docsDir);
   }
 
   /**
@@ -618,6 +621,53 @@ export class ValidationManager {
   }
 
   /**
+   * Safely decode URL with support for multiple levels of encoding
+   * This handles cases where URLs are double-encoded (e.g., %2520 -> %20 -> space)
+   */
+  private safeDecodeUrl(url: string): string {
+    let decodedUrl = url;
+    let previousUrl = '';
+    let iterations = 0;
+    const maxIterations = 3; // Prevent infinite loops
+    
+    // Keep decoding until we get a stable result or hit max iterations
+    while (decodedUrl !== previousUrl && iterations < maxIterations) {
+      previousUrl = decodedUrl;
+      try {
+        // Only decode if it contains encoded characters
+        if (decodedUrl.includes('%')) {
+          decodedUrl = decodeURIComponent(decodedUrl);
+        }
+      } catch (error) {
+        // If decoding fails, return the last valid version
+        console.log(`[ValidationManager] URL decoding failed at iteration ${iterations}:`, error);
+        return previousUrl;
+      }
+      iterations++;
+    }
+    
+    console.log(`[ValidationManager] URL decoded from "${url}" to "${decodedUrl}" in ${iterations} iterations`);
+    return decodedUrl;
+  }
+
+  /**
+   * Write user story content to local USER-STORIES.md file
+   */
+  private async writeUserStoriesToLocal(content: string): Promise<void> {
+    try {
+      const userStoriesPath = join(this.workspace, 'USER-STORIES.md');
+      console.log(`[ValidationManager] Writing user story content to ${userStoriesPath}`);
+      
+      await fs.writeFile(userStoriesPath, content, 'utf-8');
+      console.log(`[ValidationManager] Successfully wrote USER-STORIES.md (${content.length} characters)`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[ValidationManager] Failed to write USER-STORIES.md:`, errorMessage);
+      // Don't throw here - this is a nice-to-have feature, not critical
+    }
+  }
+
+  /**
    * Validate user story URI and attempt to fetch if it's a URL
    */
   private async validateUserStoryUri(userStoryUri: string): Promise<UserStoryValidationResult> {
@@ -628,11 +678,35 @@ export class ValidationManager {
     try {
       // Check if it's a valid URL
       if (userStoryUri.startsWith('http://') || userStoryUri.startsWith('https://')) {
-        const url = new URL(userStoryUri);
+        // Decode the URL safely to handle double-encoding issues
+        const decodedUri = this.safeDecodeUrl(userStoryUri);
         
-        // Fetch content from URL
+        // Validate the decoded URL is still valid
         try {
-          const response = await fetch(userStoryUri);
+          const url = new URL(decodedUri);
+          console.log(`[ValidationManager] Fetching from decoded URL: ${decodedUri}`);
+        } catch (urlError) {
+          errors.push(`Invalid URL after decoding: ${decodedUri}`);
+          return {
+            isValid: false,
+            source: 'uri',
+            errors,
+            warnings,
+            metadata: {
+              contentLength: 0,
+              wordCount: 0,
+              sectionCount: 0,
+              hasStructure: false,
+              hasRequirements: false,
+              hasAcceptanceCriteria: false
+            },
+            recommendations
+          };
+        }
+        
+        // Fetch content from decoded URL
+        try {
+          const response = await fetch(decodedUri);
           if (!response.ok) {
             errors.push(`Failed to fetch URL: HTTP ${response.status} ${response.statusText}`);
             return {
@@ -674,6 +748,12 @@ export class ValidationManager {
           
           // Validate the fetched content
           const contentValidation = await this.validateUserStoryContent(content, 'uri');
+          
+          // If content validation passes, write to local USER-STORIES.md file
+          if (contentValidation.isValid) {
+            await this.writeUserStoriesToLocal(content);
+          }
+          
           return {
             isValid: contentValidation.isValid,
             source: 'uri',
