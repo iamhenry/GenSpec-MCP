@@ -630,27 +630,79 @@ export class ValidationManager {
       if (userStoryUri.startsWith('http://') || userStoryUri.startsWith('https://')) {
         const url = new URL(userStoryUri);
         
-        // For now, we indicate that client should fetch the content
-        // In the future, this could attempt to fetch and validate
-        warnings.push('URL-based user stories require client-side fetching');
-        recommendations.push('Ensure the URL is accessible and contains valid user story content');
-        
-        return {
-          isValid: true,
-          source: 'uri',
-          content: `[CLIENT_FETCH_REQUIRED] ${userStoryUri}`,
-          errors,
-          warnings,
-          metadata: {
-            contentLength: 0,
-            wordCount: 0,
-            sectionCount: 0,
-            hasStructure: false,
-            hasRequirements: false,
-            hasAcceptanceCriteria: false
-          },
-          recommendations
-        };
+        // Fetch content from URL
+        try {
+          const response = await fetch(userStoryUri);
+          if (!response.ok) {
+            errors.push(`Failed to fetch URL: HTTP ${response.status} ${response.statusText}`);
+            return {
+              isValid: false,
+              source: 'uri',
+              errors,
+              warnings,
+              metadata: {
+                contentLength: 0,
+                wordCount: 0,
+                sectionCount: 0,
+                hasStructure: false,
+                hasRequirements: false,
+                hasAcceptanceCriteria: false
+              },
+              recommendations
+            };
+          }
+          
+          const content = await response.text();
+          if (!content || content.trim().length === 0) {
+            errors.push('URL returned empty content');
+            return {
+              isValid: false,
+              source: 'uri',
+              errors,
+              warnings,
+              metadata: {
+                contentLength: 0,
+                wordCount: 0,
+                sectionCount: 0,
+                hasStructure: false,
+                hasRequirements: false,
+                hasAcceptanceCriteria: false
+              },
+              recommendations
+            };
+          }
+          
+          // Validate the fetched content
+          const contentValidation = await this.validateUserStoryContent(content, 'uri');
+          return {
+            isValid: contentValidation.isValid,
+            source: 'uri',
+            content: content,
+            errors: [...errors, ...contentValidation.errors],
+            warnings: [...warnings, ...contentValidation.warnings],
+            metadata: contentValidation.metadata,
+            recommendations: [...recommendations, ...contentValidation.recommendations]
+          };
+          
+        } catch (fetchError) {
+          const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+          errors.push(`Failed to fetch from URL: ${errorMessage}`);
+          return {
+            isValid: false,
+            source: 'uri',
+            errors,
+            warnings,
+            metadata: {
+              contentLength: 0,
+              wordCount: 0,
+              sectionCount: 0,
+              hasStructure: false,
+              hasRequirements: false,
+              hasAcceptanceCriteria: false
+            },
+            recommendations
+          };
+        }
       } else {
         // Treat as local file path
         const filePath = isAbsolute(userStoryUri) ? userStoryUri : join(this.workspace, userStoryUri);
