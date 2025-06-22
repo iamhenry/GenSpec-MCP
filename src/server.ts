@@ -39,8 +39,11 @@ export class GenSpecServer {
   private serverIntegration: ServerIntegration;
 
   constructor(server: Server) {
+    console.error('[GenSpecServer] === CONSTRUCTOR CALLED ===');
+    console.error('[GenSpecServer] Server instance created with debug logging enabled');
     this.server = server;
     this.serverIntegration = new ServerIntegration();
+    console.error('[GenSpecServer] ServerIntegration instance created');
   }
 
   async initialize(): Promise<void> {

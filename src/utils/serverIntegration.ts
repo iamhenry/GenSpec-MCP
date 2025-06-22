@@ -18,9 +18,13 @@ export class ServerIntegration {
   private approvalManager: ApprovalManager;
 
   constructor(workspace: string = process.cwd()) {
+    console.error('[ServerIntegration] === CONSTRUCTOR CALLED ===');
+    console.error('[ServerIntegration] Debug logging enabled in ServerIntegration');
+    console.error(`[ServerIntegration] Workspace: ${workspace}`);
     this.toolManager = new ToolManager(workspace);
     this.validationManager = new ValidationManager(workspace);
     this.approvalManager = new ApprovalManager();
+    console.error('[ServerIntegration] All managers initialized');
   }
 
   /**
@@ -65,18 +69,20 @@ export class ServerIntegration {
             throw new Error(`Unknown tool: ${name}`);
         }
 
-        // Return success response with tool output schema
+        // Return success response with tool output schema (array format)
         const successResponse = {
-          content: {
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              phase: result.phase,
-              nextAction: result.nextAction,
-              draftPath: result.draftPath,
-              message: `Tool ${name} executed successfully. Phase: ${result.phase}`,
-            }, null, 2),
-          },
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                phase: result.phase,
+                nextAction: result.nextAction,
+                draftPath: result.draftPath,
+                message: `Tool ${name} executed successfully. Phase: ${result.phase}`,
+              }, null, 2),
+            }
+          ],
           isError: false,
         };
         
@@ -87,17 +93,19 @@ export class ServerIntegration {
         logger.logError(`Tool execution: ${name}`, error instanceof Error ? error : new Error(String(error)));
         logger.logTrace('TOOL_HANDLER', `Tool ${name} failed with error`, { error: error instanceof Error ? error.message : String(error) });
         
-        // Return error response
+        // Return error response (array format)
         const errorResponse = {
-          content: {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-              tool: name,
-              timestamp: new Date().toISOString(),
-            }, null, 2),
-          },
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                tool: name,
+                timestamp: new Date().toISOString(),
+              }, null, 2),
+            }
+          ],
           isError: true,
         };
         
@@ -114,12 +122,17 @@ export class ServerIntegration {
   getPromptHandler() {
     return async (request: any) => {
       try {
+        console.error(`[PROMPT_HANDLER] === ENTRY POINT REACHED ===`);
+        console.error(`[PROMPT_HANDLER] Full request object: ${JSON.stringify(request, null, 2)}`);
+        
         const { name, arguments: args } = request.params;
         
-        console.log(`[ServerIntegration] === DEBUG: PROMPT_HANDLER START ===`);
-        console.log(`[ServerIntegration] Raw prompt name: "${name}"`);
-        console.log(`[ServerIntegration] Request params: ${JSON.stringify(request.params, null, 2)}`);
-        console.log(`[ServerIntegration] Arguments: ${JSON.stringify(args, null, 2)}`);
+        console.error(`[PROMPT_HANDLER] === DEBUG: PROMPT_HANDLER START ===`);
+        console.error(`[PROMPT_HANDLER] Raw prompt name: "${name}"`);
+        console.error(`[PROMPT_HANDLER] Request params: ${JSON.stringify(request.params, null, 2)}`);
+        console.error(`[PROMPT_HANDLER] Arguments: ${JSON.stringify(args, null, 2)}`);
+        console.error(`[PROMPT_HANDLER] Arguments type: ${typeof args}`);
+        console.error(`[PROMPT_HANDLER] Arguments constructor: ${args?.constructor?.name}`);
         
         logger.logInfo(`Prompt requested: ${name}`);
 
@@ -157,16 +170,91 @@ export class ServerIntegration {
 
         // Extract user story arguments from prompt
         const toolArgs: { userStory?: string; userStoryUri?: string } = {};
+        
+        // DEBUG: Show the actual structure of args
+        console.error(`[PROMPT_HANDLER] === ARGUMENT PARSING DEBUG ===`);
+        console.error(`[PROMPT_HANDLER] Raw args type: ${typeof args}`);
+        console.error(`[PROMPT_HANDLER] Raw args is array: ${Array.isArray(args)}`);
+        console.error(`[PROMPT_HANDLER] Raw args is null: ${args === null}`);
+        console.error(`[PROMPT_HANDLER] Raw args is undefined: ${args === undefined}`);
+        console.error(`[PROMPT_HANDLER] Raw args keys: ${args ? Object.keys(args) : 'none'}`);
+        console.error(`[PROMPT_HANDLER] Raw args value: ${JSON.stringify(args)}`);
+        console.error(`[PROMPT_HANDLER] Raw args length (if array): ${Array.isArray(args) ? args.length : 'N/A'}`);
+        
+        // Handle different argument formats
+        console.error(`[PROMPT_HANDLER] === CHECKING NAMED ARGUMENTS ===`);
         if (args?.userStory) {
           toolArgs.userStory = args.userStory;
-          console.log(`[ServerIntegration] Using userStory argument from prompt`);
+          console.error(`[PROMPT_HANDLER] ✓ Using userStory argument from prompt: ${args.userStory}`);
+        } else {
+          console.error(`[PROMPT_HANDLER] ✗ No userStory argument found`);
         }
+        
         if (args?.userStoryUri) {
           toolArgs.userStoryUri = args.userStoryUri;
-          console.log(`[ServerIntegration] Using userStoryUri argument from prompt`);
+          console.error(`[PROMPT_HANDLER] ✓ Using userStoryUri argument from prompt: ${args.userStoryUri}`);
+        } else {
+          console.error(`[PROMPT_HANDLER] ✗ No userStoryUri argument found`);
+        }
+        
+        // Check if args is a string (positional argument) rather than an object
+        console.error(`[PROMPT_HANDLER] === CHECKING STRING ARGUMENT ===`);
+        if (typeof args === 'string') {
+          console.error(`[PROMPT_HANDLER] ✓ DETECTED: args is a string (positional argument): "${args}"`);
+          // Assume it's a URI if it starts with http
+          if (args.startsWith('http')) {
+            toolArgs.userStoryUri = args;
+            console.error(`[PROMPT_HANDLER] ✓ Using positional argument as userStoryUri`);
+          } else {
+            toolArgs.userStory = args;
+            console.error(`[PROMPT_HANDLER] ✓ Using positional argument as userStory`);
+          }
+        } else {
+          console.error(`[PROMPT_HANDLER] ✗ args is not a string`);
+        }
+        
+        // Handle case where args might be an array with a single element
+        console.error(`[PROMPT_HANDLER] === CHECKING ARRAY ARGUMENT ===`);
+        if (Array.isArray(args) && args.length === 1) {
+          console.error(`[PROMPT_HANDLER] ✓ DETECTED: args is an array with one element: "${args[0]}"`);
+          const singleArg = args[0];
+          if (typeof singleArg === 'string') {
+            if (singleArg.startsWith('http')) {
+              toolArgs.userStoryUri = singleArg;
+              console.error(`[PROMPT_HANDLER] ✓ Using array element as userStoryUri`);
+            } else {
+              toolArgs.userStory = singleArg;
+              console.error(`[PROMPT_HANDLER] ✓ Using array element as userStory`);
+            }
+          }
+        } else {
+          console.error(`[PROMPT_HANDLER] ✗ args is not a single-element array`);
         }
 
-        console.log(`[ServerIntegration] Executing tool automatically: ${toolName} with args:`, toolArgs);
+        // Final fallback: if no arguments were extracted but we have a raw request, try to extract URL from it
+        console.error(`[PROMPT_HANDLER] === FALLBACK URL EXTRACTION ===`);
+        if (!toolArgs.userStory && !toolArgs.userStoryUri) {
+          console.error(`[PROMPT_HANDLER] ⚠️ No arguments extracted, checking raw request for URL...`);
+          const requestStr = JSON.stringify(request);
+          console.error(`[PROMPT_HANDLER] Full request string: ${requestStr}`);
+          
+          // Look for URLs in the request string
+          const urlMatch = requestStr.match(/https?:\/\/[^\s"']+/);
+          if (urlMatch) {
+            const foundUrl = urlMatch[0];
+            console.error(`[PROMPT_HANDLER] ✓ Found URL in request: ${foundUrl}`);
+            toolArgs.userStoryUri = foundUrl;
+          } else {
+            console.error(`[PROMPT_HANDLER] ✗ No URL found in request string`);
+          }
+        } else {
+          console.error(`[PROMPT_HANDLER] ✓ Arguments already extracted, skipping fallback`);
+        }
+
+        console.error(`[PROMPT_HANDLER] === FINAL EXECUTION ===`);
+        console.error(`[PROMPT_HANDLER] Executing tool automatically: ${toolName} with args:`, toolArgs);
+        console.error(`[PROMPT_HANDLER] Final toolArgs.userStory: ${toolArgs.userStory || 'undefined'}`);
+        console.error(`[PROMPT_HANDLER] Final toolArgs.userStoryUri: ${toolArgs.userStoryUri || 'undefined'}`);
         
         try {
           // Execute the tool directly with the provided arguments
@@ -190,7 +278,7 @@ export class ServerIntegration {
 
           console.log(`[ServerIntegration] Tool execution successful: ${JSON.stringify(result)}`);
           
-          // Return success message with workflow results
+          // Return success message with workflow results  
           return {
             messages: [
               {

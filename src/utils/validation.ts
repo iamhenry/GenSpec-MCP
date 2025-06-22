@@ -47,6 +47,12 @@ export class ValidationManager {
    * Priority order: userStory inline → userStoryUri → local USER-STORIES.md
    */
   async validateUserStories(userStory?: string, userStoryUri?: string): Promise<UserStoryValidationResult> {
+    console.log('[ValidationManager] === VALIDATION DEBUG START ===');
+    console.log('[ValidationManager] Arguments received:');
+    console.log('  userStory:', userStory ? `"${userStory.substring(0, 100)}..."` : 'undefined');
+    console.log('  userStoryUri:', userStoryUri || 'undefined');
+    console.log('  workspace:', this.workspace);
+    
     logger.logInfo('Validating user stories...');
     
     const cacheKey = `user_stories_${userStory ? 'inline' : ''}${userStoryUri || ''}${this.workspace}`;
@@ -55,6 +61,7 @@ export class ValidationManager {
     if (this.cacheEnabled) {
       const cached = this.getCachedResult(cacheKey);
       if (cached) {
+        console.log('[ValidationManager] Returning cached result');
         return cached as UserStoryValidationResult;
       }
     }
@@ -63,18 +70,19 @@ export class ValidationManager {
 
     // Priority 1: Check inline userStory
     if (userStory && userStory.trim()) {
-      console.log('[ValidationManager] Using inline userStory argument');
+      console.log('[ValidationManager] FLOW: Using inline userStory argument');
       result = await this.validateUserStoryContent(userStory, 'inline');
     }
     // Priority 2: Check userStoryUri
     else if (userStoryUri) {
-      console.log('[ValidationManager] Using userStoryUri argument');
+      console.log('[ValidationManager] FLOW: Using userStoryUri argument');
+      console.log('[ValidationManager] About to call validateUserStoryUri with:', userStoryUri);
       result = await this.validateUserStoryUri(userStoryUri);
     }
     // Priority 3: Fallback to local USER-STORIES.md
     else {
       const userStoriesPath = join(this.workspace, 'USER-STORIES.md');
-      console.log(`[ValidationManager] Checking local USER-STORIES.md at: ${userStoriesPath}`);
+      console.log(`[ValidationManager] FLOW: Checking local USER-STORIES.md at: ${userStoriesPath}`);
       result = await this.validateLocalUserStories(userStoriesPath);
     }
 
@@ -82,6 +90,15 @@ export class ValidationManager {
     if (this.cacheEnabled) {
       this.setCachedResult(cacheKey, result);
     }
+
+    console.log('[ValidationManager] === VALIDATION DEBUG END ===');
+    console.log('[ValidationManager] Final result:', {
+      isValid: result.isValid,
+      source: result.source,
+      wordCount: result.metadata.wordCount,
+      errorCount: result.errors.length,
+      errors: result.errors
+    });
 
     return result;
   }
@@ -538,12 +555,24 @@ export class ValidationManager {
    * Validate user story content and extract metadata
    */
   private async validateUserStoryContent(content: string, source: 'inline' | 'uri' | 'local_file'): Promise<UserStoryValidationResult> {
+    console.log('[ValidationManager] === CONTENT VALIDATION DEBUG ===');
+    console.log('[ValidationManager] Source:', source);
+    console.log('[ValidationManager] Content length:', content?.length || 0);
+    console.log('[ValidationManager] Content preview (first 100 chars):', content?.substring(0, 100) || 'undefined');
+    
+    // CRITICAL FIX: If the "content" is actually a URL, redirect to URI validation
+    if (source === 'inline' && content && (content.startsWith('http://') || content.startsWith('https://'))) {
+      console.log('[ValidationManager] REDIRECT: Inline content is a URL, redirecting to URI validation');
+      return await this.validateUserStoryUri(content);
+    }
+    
     const errors: string[] = [];
     const warnings: string[] = [];
     const recommendations: string[] = [];
 
     // Basic validation
     if (!content || content.trim().length === 0) {
+      console.log('[ValidationManager] ERROR: Content is empty or undefined');
       errors.push('User story content is empty');
       return {
         isValid: false,
@@ -569,16 +598,28 @@ export class ValidationManager {
     const hasRequirements = /\b(requirement|must|should|shall)\b/i.test(trimmedContent);
     const hasAcceptanceCriteria = /\b(acceptance criteria|given|when|then|scenario)\b/i.test(trimmedContent);
 
+    console.log('[ValidationManager] Analysis results:');
+    console.log('  Trimmed length:', trimmedContent.length);
+    console.log('  Word count:', wordCount);
+    console.log('  Section count:', sectionCount);
+    console.log('  Has structure:', hasStructure);
+    console.log('  Has requirements:', hasRequirements);
+    console.log('  Has acceptance criteria:', hasAcceptanceCriteria);
+
     // Content quality validation
     if (trimmedContent.length < 10) {
+      console.log('[ValidationManager] ERROR: Content too short (<10 chars)');
       errors.push('User story content too short (minimum 10 characters)');
     } else if (trimmedContent.length < 50) {
+      console.log('[ValidationManager] WARNING: Content very short (<50 chars)');
       warnings.push('User story content is very short, consider adding more detail');
     }
 
     if (wordCount < 5) {
-      errors.push('User story has too few words (minimum 5 words)');
+      console.log('[ValidationManager] ERROR: Too few words (<5)');
+      errors.push(`User story has too few words (minimum 5 words). Received ${wordCount} words from source: ${source}. Content preview: "${trimmedContent.substring(0, 100)}"`);
     } else if (wordCount < 20) {
+      console.log('[ValidationManager] WARNING: Content brief (<20 words)');
       warnings.push('User story is quite brief, consider adding more context');
     }
 
@@ -625,6 +666,13 @@ export class ValidationManager {
    * This handles cases where URLs are double-encoded (e.g., %2520 -> %20 -> space)
    */
   private safeDecodeUrl(url: string): string {
+    console.log('[ValidationManager] === URL DECODING DEBUG ===');
+    console.log('[ValidationManager] Input URL:', url);
+    console.log('[ValidationManager] URL length:', url.length);
+    console.log('[ValidationManager] Contains %2520:', url.includes('%2520'));
+    console.log('[ValidationManager] Contains %20:', url.includes('%20'));
+    console.log('[ValidationManager] Raw URL bytes:', Array.from(url).map(c => c.charCodeAt(0)).join(','));
+    
     let decodedUrl = url;
     let previousUrl = '';
     let iterations = 0;
@@ -633,10 +681,16 @@ export class ValidationManager {
     // Keep decoding until we get a stable result or hit max iterations
     while (decodedUrl !== previousUrl && iterations < maxIterations) {
       previousUrl = decodedUrl;
+      console.log(`[ValidationManager] Decode iteration ${iterations + 1}:`);
+      console.log('  Before:', decodedUrl);
+      
       try {
         // Only decode if it contains encoded characters
         if (decodedUrl.includes('%')) {
           decodedUrl = decodeURIComponent(decodedUrl);
+          console.log('  After decode:', decodedUrl);
+        } else {
+          console.log('  No % characters, skipping decode');
         }
       } catch (error) {
         // If decoding fails, return the last valid version
@@ -646,7 +700,7 @@ export class ValidationManager {
       iterations++;
     }
     
-    console.log(`[ValidationManager] URL decoded from "${url}" to "${decodedUrl}" in ${iterations} iterations`);
+    console.log(`[ValidationManager] FINAL: URL decoded from "${url}" to "${decodedUrl}" in ${iterations} iterations`);
     return decodedUrl;
   }
 
@@ -706,8 +760,13 @@ export class ValidationManager {
         
         // Fetch content from decoded URL
         try {
+          console.log('[ValidationManager] Starting fetch...');
+          console.log('[ValidationManager] Final URL being fetched:', decodedUri);
           const response = await fetch(decodedUri);
+          console.log('[ValidationManager] Fetch completed. Status:', response.status, response.statusText);
+          
           if (!response.ok) {
+            console.log('[ValidationManager] ERROR: Fetch failed with status:', response.status);
             errors.push(`Failed to fetch URL: HTTP ${response.status} ${response.statusText}`);
             return {
               isValid: false,
@@ -726,8 +785,14 @@ export class ValidationManager {
             };
           }
           
+          console.log('[ValidationManager] Reading response text...');
           const content = await response.text();
+          console.log('[ValidationManager] Response text length:', content.length);
+          console.log('[ValidationManager] First 200 chars:', content.substring(0, 200));
+          console.log('[ValidationManager] Content type:', response.headers.get('content-type'));
+          
           if (!content || content.trim().length === 0) {
+            console.log('[ValidationManager] ERROR: Content is empty');
             errors.push('URL returned empty content');
             return {
               isValid: false,
@@ -746,8 +811,17 @@ export class ValidationManager {
             };
           }
           
+          console.log('[ValidationManager] Content retrieved successfully, validating...');
+          console.log('[ValidationManager] About to call validateUserStoryContent with content length:', content.length);
           // Validate the fetched content
           const contentValidation = await this.validateUserStoryContent(content, 'uri');
+          console.log('[ValidationManager] Content validation result:', {
+            isValid: contentValidation.isValid,
+            wordCount: contentValidation.metadata.wordCount,
+            contentLength: contentValidation.metadata.contentLength,
+            errors: contentValidation.errors,
+            warnings: contentValidation.warnings
+          });
           
           // If content validation passes, write to local USER-STORIES.md file
           if (contentValidation.isValid) {
